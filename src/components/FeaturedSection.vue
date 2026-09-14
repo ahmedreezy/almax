@@ -347,10 +347,9 @@
               <div class="field">
                 <label>Network</label>
                 <div class="provider-cards" style="margin-bottom:0">
-                  <div class="provider-card provider-card--disabled">
+                  <div class="provider-card" :class="{ selected: selectedProvider === 'mtn' }" @click="selectedProvider = 'mtn'">
                     <div class="provider-logo mtn-logo">MTN</div>
                     <div class="provider-name">MTN MoMo</div>
-                    <div class="coming-soon-badge">Coming Soon</div>
                   </div>
                   <div class="provider-card" :class="{ selected: selectedProvider === 'airtel' }" @click="selectedProvider = 'airtel'">
                     <div class="provider-logo airtel-logo">Airtel</div>
@@ -394,7 +393,7 @@
             </button>
             <p class="mm-check-link" style="margin-top:14px;cursor:pointer;color:var(--gold);font-size:13px;text-decoration:underline"
                @click="vipStep = 'submit-txn'; txnInput = ''; txnError = ''">
-              Already paid? Enter your Airtel transaction ID →
+              Already paid? Enter your mobile money transaction ID →
             </p>
             <p class="mm-back" @click="closeVip">Close</p>
           </template>
@@ -404,7 +403,7 @@
             <div class="mm-icon">🧾</div>
             <h3 class="mm-title">VERIFY <span class="gold-text">PAYMENT</span></h3>
             <p class="mm-sub">
-              Enter the Airtel Money transaction ID from the SMS you received after paying.
+              Enter the mobile money transaction ID from the SMS you received after paying.
               We'll verify it with the network and activate your subscription instantly.
             </p>
             <div class="reg-form" style="text-align:left">
@@ -419,7 +418,7 @@
                   @keydown.enter.prevent="submitTransactionId"
                 />
                 <p class="security-q-hint" style="margin-top:4px;font-size:12px">
-                  Check your SMS for a message like "Airtel Money Transaction ID: CI2505…"
+                  Check your payment confirmation SMS for the transaction ID.
                 </p>
               </div>
             </div>
@@ -982,7 +981,7 @@ export default {
       this.regUser = stored
       await this.checkStatus()
     },
-    /** User manually submits Airtel Money transaction ID to verify a pending/failed payment */
+    /** User manually submits a mobile money transaction ID to verify a pending/failed payment */
     async submitTransactionId() {
       const txnId = (this.txnInput || '').trim()
       if (!txnId) {
@@ -1709,8 +1708,6 @@ export default {
   transition: border-color 0.2s; min-width: 100px; position: relative;
 }
 .provider-card.selected { border-color: var(--gold); background: rgba(255,215,0,0.05); }
-.provider-card--disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-.coming-soon-badge { position: absolute; top: -9px; right: -6px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background: #444; color: #bbb; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
 .provider-logo { font-size: 15px; font-weight: 900; padding: 8px 14px; border-radius: 8px; display: inline-block; margin-bottom: 8px; }
 .mtn-logo   { background: #FFCC00; color: #000; }
 .airtel-logo{ background: #ED1C24; color: #fff; }

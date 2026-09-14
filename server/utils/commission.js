@@ -1,4 +1,4 @@
-const DEFAULT_COMMISSION_RATE = 0.10
+const DEFAULT_COMMISSION_RATE = 0.20
 
 function parseBooleanEnv(value, fallback = true) {
   if (value === undefined) return fallback

@@ -3,7 +3,7 @@
 process.env.JWT_SECRET = 'test-secret-key'
 process.env.NODE_ENV = 'test'
 process.env.JPESA_AGENT_COMMISSION_ENABLED = 'true'
-process.env.JPESA_AGENT_COMMISSION_RATE = '0.10'
+process.env.JPESA_AGENT_COMMISSION_RATE = '0.20'
 
 const jwt = require('jsonwebtoken')
 const { newDb } = require('pg-mem')
@@ -82,14 +82,14 @@ describe('GET /api/analytics/developer', () => {
   const devToken = jwt.sign({ id: 2, username: 'almaxdev', role: 'developer' }, process.env.JWT_SECRET)
   const ownerToken = jwt.sign({ id: 1, username: 'admin', role: 'owner' }, process.env.JWT_SECRET)
 
-  test('reports only tracked confirmed 10% commission and ignores old or failed rows', async () => {
+  test('reports the current 20% rate while preserving historical commission amounts', async () => {
     const res = await request
       .get('/api/analytics/developer')
       .set('Authorization', `Bearer ${devToken}`)
 
     expect(res.status).toBe(200)
     expect(res.body.finance.total_revenue).toBe(530000)
-    expect(res.body.commission.ratio).toBe(0.1)
+    expect(res.body.commission.ratio).toBe(0.2)
     expect(res.body.commission.tracked_payments_total).toBe(10000)
     expect(res.body.commission.total_earned).toBe(1000)
     expect(res.body.commission.outstanding).toBe(1000)
