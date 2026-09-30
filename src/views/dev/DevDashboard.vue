@@ -560,6 +560,159 @@
           </div>
         </div>
 
+        <!-- ========== SUPPORT INSIGHTS ================================= -->
+        <div v-if="activeSection === 'support'">
+          <div class="insights-toolbar">
+            <div>
+              <p class="insights-eyebrow">Customer feedback briefing</p>
+              <p class="insights-range" v-if="si.period">{{ fmtDate(si.period.from) }} — {{ fmtDate(si.period.to) }}</p>
+            </div>
+            <div class="period-switcher" aria-label="Feedback reporting period">
+              <button
+                v-for="days in [7, 30, 90, 365]"
+                :key="days"
+                type="button"
+                :class="['period-btn', { active: supportDays === days }]"
+                :disabled="supportLoading"
+                @click="setSupportDays(days)"
+              >
+                {{ days === 365 ? '1 year' : days + ' days' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="supportLoading && !supportInsights" class="insights-state">
+            <div class="d-spinner"></div>
+            <span>Preparing customer insights…</span>
+          </div>
+          <div v-else-if="supportError" class="insights-state insights-state--error">
+            <span>{{ supportError }}</span>
+            <button type="button" @click="fetchSupportInsights">Retry</button>
+          </div>
+          <template v-else>
+            <div class="insights-brief">
+              <div class="brief-marker">BRIEF</div>
+              <div class="brief-copy">
+                <h2>{{ si.brief?.headline }}</h2>
+                <div v-if="si.brief?.highlights?.length" class="brief-highlights">
+                  <span v-for="highlight in si.brief.highlights" :key="highlight">{{ highlight }}</span>
+                </div>
+                <p v-else>Feedback patterns will appear here as customers use the support chat.</p>
+              </div>
+            </div>
+
+            <div class="kpi-grid" style="margin-top:18px">
+              <div class="kpi-card kpi-blue">
+                <p class="kpi-label">Conversations</p>
+                <p class="kpi-value">{{ formatNum(si.summary?.total_conversations) }}</p>
+                <p class="kpi-sub">Customer support signals</p>
+              </div>
+              <div class="kpi-card kpi-gold">
+                <p class="kpi-label">Direct Feedback</p>
+                <p class="kpi-value">{{ formatNum(si.summary?.feedback_signals) }}</p>
+                <p class="kpi-sub">Complaints and suggestions</p>
+              </div>
+              <div class="kpi-card kpi-red">
+                <p class="kpi-label">Needs Attention</p>
+                <p class="kpi-value">{{ formatNum(si.summary?.escalated) }}</p>
+                <p class="kpi-sub">Waiting for a person</p>
+              </div>
+              <div class="kpi-card kpi-green">
+                <p class="kpi-label">Resolution Rate</p>
+                <p class="kpi-value">{{ Number(si.summary?.resolution_rate || 0).toFixed(1) }}%</p>
+                <p class="kpi-sub">{{ formatNum(si.summary?.resolved) }} resolved</p>
+              </div>
+            </div>
+
+            <div class="two-col-grid insights-grid">
+              <div class="section-card">
+                <p class="section-card-title">Conversation themes</p>
+                <p class="section-card-sub">Where customers are experiencing friction or offering ideas</p>
+                <div class="hbar-list">
+                  <div v-for="row in supportCategoryRows" :key="row.category" class="hbar-row hbar-row--lg">
+                    <span class="hbar-label insights-bar-label">{{ row.label }}</span>
+                    <div class="hbar-track">
+                      <div class="hbar-fill hbar-fill--gold" :style="{ width: hBarW(row.count, maxSupportCategory) + '%' }"></div>
+                    </div>
+                    <span class="hbar-value insights-bar-value">{{ formatNum(row.count) }}</span>
+                  </div>
+                  <p v-if="!supportCategoryRows.length" class="empty-msg">No conversation themes in this period</p>
+                </div>
+              </div>
+
+              <div class="section-card">
+                <p class="section-card-title">Customer sentiment</p>
+                <p class="section-card-sub">An anonymized temperature check across support conversations</p>
+                <div class="sentiment-grid">
+                  <div v-for="key in ['positive', 'neutral', 'frustrated', 'angry']" :key="key" :class="['sentiment-cell', 'sentiment-cell--' + key]">
+                    <span class="sentiment-value">{{ formatNum(si.by_sentiment?.[key]) }}</span>
+                    <span class="sentiment-label">{{ capitalize(key) }}</span>
+                  </div>
+                </div>
+                <div class="negative-meter">
+                  <span>Negative sentiment rate</span>
+                  <strong>{{ Number(si.summary?.negative_rate || 0).toFixed(1) }}%</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-card" style="margin-top:16px">
+              <p class="section-card-title">Priority improvement areas</p>
+              <p class="section-card-sub">Ranked by volume, negative sentiment, and human escalation</p>
+              <div v-if="si.themes?.length" class="theme-grid">
+                <article v-for="(theme, index) in si.themes" :key="theme.category" class="theme-card">
+                  <div class="theme-rank">0{{ index + 1 }}</div>
+                  <div class="theme-main">
+                    <div class="theme-title-row">
+                      <h3>{{ theme.label }}</h3>
+                      <span>{{ formatNum(theme.count) }} reports</span>
+                    </div>
+                    <p>{{ theme.recommended_action }}</p>
+                    <div class="theme-meta">
+                      <span>{{ formatNum(theme.negative) }} negative</span>
+                      <span>{{ formatNum(theme.escalated) }} escalated</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <p v-else class="empty-msg">Improvement areas will appear after support conversations are classified.</p>
+            </div>
+
+            <div class="insights-bottom-grid">
+              <div class="section-card">
+                <p class="section-card-title">Conversation volume</p>
+                <p class="section-card-sub">Daily support activity for the selected period</p>
+                <div class="vbar-wrap" v-if="supportTrend.length">
+                  <div class="vbar-bars">
+                    <div v-for="point in supportTrend" :key="point.date" class="vbar-col" :title="`${point.date}: ${point.conversations} conversations`">
+                      <div class="vbar-fill vbar-fill--blue" :style="{ height: barH(point.conversations, maxSupportTrend) + '%' }"></div>
+                    </div>
+                  </div>
+                  <div class="vbar-x">
+                    <span v-for="(point, i) in supportTrend" :key="'support-' + i" class="vbar-x-lbl">{{ i % supportTrendLabelStep === 0 ? shortDate(point.date) : '' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-card">
+                <p class="section-card-title">Recent anonymized signals</p>
+                <p class="section-card-sub">Conversation summaries only—customer identity is excluded</p>
+                <div v-if="si.recent_feedback?.length" class="feedback-list">
+                  <article v-for="item in si.recent_feedback" :key="item.reference" class="feedback-item">
+                    <div class="feedback-head">
+                      <span class="feedback-category">{{ item.category_label }}</span>
+                      <span :class="['feedback-sentiment', 'feedback-sentiment--' + item.sentiment]">{{ capitalize(item.sentiment) }}</span>
+                      <time>{{ fmtDate(item.last_message_at) }}</time>
+                    </div>
+                    <p>{{ item.summary }}</p>
+                  </article>
+                </div>
+                <p v-else class="empty-msg">No summarized feedback in this period</p>
+              </div>
+            </div>
+          </template>
+        </div>
+
       </div>
       <!-- /content -->
     </main>
@@ -578,6 +731,10 @@ export default {
       loading: true,
       error: '',
       analytics: null,
+      supportInsights: null,
+      supportDays: 30,
+      supportLoading: false,
+      supportError: '',
       retryingCommission: {},
       withdrawalSaving: false,
       withdrawalError: '',
@@ -617,6 +774,12 @@ export default {
           label: 'Packages',
           desc: 'Active plans',
           icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+        },
+        {
+          id: 'support',
+          label: 'Support Insights',
+          desc: 'Customer feedback',
+          icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/><path d="M8 9h8M8 13h5"/></svg>'
         }
       ]
     }
@@ -639,6 +802,26 @@ export default {
     },
     u() { return this.analytics?.users || {} },
     s() { return this.analytics?.subscriptions || {} },
+    si() { return this.supportInsights || {} },
+    supportCategoryRows() {
+      return Object.entries(this.si.by_category || {})
+        .map(([category, row]) => ({ category, ...row }))
+        .filter(row => Number(row.count) > 0)
+        .sort((a, b) => Number(b.count) - Number(a.count))
+    },
+    maxSupportCategory() {
+      return Math.max(...this.supportCategoryRows.map(row => Number(row.count) || 0), 1)
+    },
+    supportTrend() { return this.si.trend || [] },
+    maxSupportTrend() {
+      return Math.max(...this.supportTrend.map(row => Number(row.conversations) || 0), 1)
+    },
+    supportTrendLabelStep() {
+      if (this.supportTrend.length > 120) return 60
+      if (this.supportTrend.length > 60) return 15
+      if (this.supportTrend.length > 30) return 10
+      return 5
+    },
     revenueChart() { return this.analytics?.charts?.revenue || [] },
     signupsChart() { return this.analytics?.charts?.signups || [] },
     maxRevenue() {
@@ -673,6 +856,7 @@ export default {
       try {
         const { data } = await devApi.get('/api/analytics/developer')
         this.analytics = data
+        await this.fetchSupportInsights()
       } catch (err) {
         if (err.response?.status === 401 || err.response?.status === 403) {
           this.$router.push('/dev/login')
@@ -682,6 +866,29 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    async fetchSupportInsights() {
+      this.supportLoading = true
+      this.supportError = ''
+      try {
+        const { data } = await devApi.get('/api/analytics/developer/support-insights', {
+          params: { days: this.supportDays }
+        })
+        this.supportInsights = data
+      } catch (err) {
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          this.$router.push('/dev/login')
+        } else {
+          this.supportError = 'Support insights could not be loaded. Please try again.'
+        }
+      } finally {
+        this.supportLoading = false
+      }
+    },
+    async setSupportDays(days) {
+      if (this.supportDays === days || this.supportLoading) return
+      this.supportDays = days
+      await this.fetchSupportInsights()
     },
     logout() {
       localStorage.removeItem('devToken')
@@ -1688,11 +1895,278 @@ code {
   font-size: 12px;
 }
 
+/* ── Support insights ───────────────────────────────────────────────────── */
+.insights-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.insights-eyebrow {
+  margin: 0;
+  color: #d1d5db;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.insights-range {
+  margin: 4px 0 0;
+  color: #4b5563;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.period-switcher {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #0f1623;
+}
+
+.period-btn {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.period-btn:hover:not(:disabled) { color: #d1d5db; }
+.period-btn.active { background: #1a2540; color: #f59e0b; }
+.period-btn:disabled { cursor: wait; opacity: 0.65; }
+
+.insights-state {
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.insights-state--error {
+  flex-direction: column;
+  color: #f87171;
+}
+
+.insights-state--error button {
+  border: 1px solid #253050;
+  border-radius: 6px;
+  background: #1a2540;
+  color: #e5e7eb;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+
+.insights-brief {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 12px;
+  background: linear-gradient(110deg, rgba(59, 130, 246, 0.12), rgba(17, 24, 39, 0.96) 48%);
+}
+
+.brief-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(59, 130, 246, 0.22);
+  color: #60a5fa;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.brief-copy { padding: 22px 24px; }
+
+.brief-copy h2 {
+  max-width: 820px;
+  margin: 0;
+  color: #f3f4f6;
+  font-size: clamp(18px, 2vw, 25px);
+  line-height: 1.2;
+}
+
+.brief-copy > p {
+  margin: 9px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.brief-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+
+.brief-highlights span {
+  position: relative;
+  padding-left: 12px;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.brief-highlights span::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+
+.insights-grid { margin-top: 16px; }
+.insights-bar-label { width: 108px; }
+.insights-bar-value { width: 30px; }
+
+.sentiment-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.sentiment-cell {
+  display: flex;
+  min-height: 74px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #0f1623;
+}
+
+.sentiment-value { color: #e5e7eb; font-size: 20px; font-weight: 800; }
+.sentiment-label { margin-top: 4px; color: #6b7280; font-size: 9px; text-transform: uppercase; }
+.sentiment-cell--positive { border-bottom-color: rgba(16, 185, 129, 0.65); }
+.sentiment-cell--neutral { border-bottom-color: rgba(107, 114, 128, 0.65); }
+.sentiment-cell--frustrated { border-bottom-color: rgba(249, 115, 22, 0.65); }
+.sentiment-cell--angry { border-bottom-color: rgba(239, 68, 68, 0.65); }
+
+.negative-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #1f2937;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.negative-meter strong { color: #f97316; font-size: 14px; }
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid #1f2937;
+  background: #1f2937;
+}
+
+.theme-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 126px;
+  padding: 16px;
+  background: #0f1623;
+}
+
+.theme-rank {
+  color: #374151;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.theme-main h3 { margin: 0; color: #e5e7eb; font-size: 13px; }
+.theme-main > p { margin: 8px 0 12px; color: #6b7280; font-size: 11px; line-height: 1.5; }
+
+.theme-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.theme-title-row > span {
+  flex-shrink: 0;
+  color: #f59e0b;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.theme-meta { display: flex; gap: 12px; color: #4b5563; font-size: 9px; text-transform: uppercase; }
+
+.insights-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.feedback-list {
+  max-height: 330px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 4px;
+}
+
+.feedback-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #1f2937;
+}
+
+.feedback-item:last-child { border-bottom: 0; }
+
+.feedback-head { display: flex; align-items: center; gap: 7px; }
+.feedback-head time { margin-left: auto; color: #374151; font-size: 9px; }
+.feedback-item > p { margin: 8px 0 0; color: #9ca3af; font-size: 11px; line-height: 1.5; }
+
+.feedback-category,
+.feedback-sentiment {
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feedback-category { background: rgba(59, 130, 246, 0.12); color: #60a5fa; }
+.feedback-sentiment { background: rgba(107, 114, 128, 0.12); color: #9ca3af; }
+.feedback-sentiment--positive { color: #34d399; }
+.feedback-sentiment--frustrated { color: #fb923c; }
+.feedback-sentiment--angry { color: #f87171; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .kpi-grid       { grid-template-columns: repeat(2, 1fr); }
   .two-col-grid   { grid-template-columns: 1fr; }
   .chart-row      { grid-template-columns: 1fr; }
+  .theme-grid     { grid-template-columns: 1fr; }
+  .insights-bottom-grid { grid-template-columns: 1fr; }
   .withdrawal-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .withdrawal-submit { width: 100%; }
 }
@@ -1703,6 +2177,10 @@ code {
   .kpi-grid       { grid-template-columns: 1fr 1fr; }
   .d-body         { padding: 16px; }
   .d-header       { padding: 16px; }
+  .insights-toolbar { align-items: stretch; flex-direction: column; }
+  .period-switcher { align-self: flex-start; }
+  .insights-brief { grid-template-columns: 44px minmax(0, 1fr); }
+  .sentiment-grid { grid-template-columns: repeat(2, 1fr); }
   .withdrawal-head { flex-direction: column; }
   .withdrawal-form { grid-template-columns: 1fr; }
   .withdrawal-row  { grid-template-columns: 78px 1fr 104px; }
