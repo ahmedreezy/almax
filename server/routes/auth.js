@@ -38,12 +38,14 @@ router.post('/login', async (req, res) => {
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
+    const role = admin.role || (admin.username === 'almaxdev' ? 'developer' : 'owner')
+    const adminPayload = { id: admin.id, username: admin.username, role }
     const token = jwt.sign(
-      { id: admin.id, username: admin.username },
+      adminPayload,
       jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES_IN || '12h' }
     )
-    res.json({ token, username: admin.username })
+    res.json({ token, username: admin.username, admin: adminPayload })
   } catch (err) {
     console.error('Login error:', err)
     res.status(500).json({ error: 'Server error' })

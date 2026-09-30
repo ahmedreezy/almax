@@ -1,0 +1,17 @@
+
+> almax-football-predictions@1.1.2 serve
+> vue-cli-service serve --port 8080
+
+[dotenv][DEBUG] did not match key and value when parsing line 1: # PostgreSQL connection string — leave blank to use in-memory database
+[dotenv][DEBUG] did not match key and value when parsing line 3: 
+[dotenv][DEBUG] did not match key and value when parsing line 4: # JWT secret
+[dotenv][DEBUG] did not match key and value when parsing line 6: 
+[dotenv][DEBUG] did not match key and value when parsing line 7: # Token expiry
+[dotenv][DEBUG] did not match key and value when parsing line 9: 
+[dotenv][DEBUG] did not match key and value when parsing line 10: # Initial admin password (used once by db:seed — min 12 characters)
+[dotenv][DEBUG] did not match key and value when parsing line 12: 
+[dotenv][DEBUG] did not match key and value when parsing line 13: # API key for live scores (api-football.com)
+[dotenv][DEBUG] did not match key and value when parsing line 15: 
+[dotenv][DEBUG] did not match key and value when parsing line 16: # Allowed CORS origin for production
+[dotenv][DEBUG] did not match key and value when parsing line 18: 
+ INFO  Starting development server...

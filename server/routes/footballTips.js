@@ -53,10 +53,6 @@ router.get('/', async (req, res) => {
 // POST a new tip (admin)
 router.post('/', auth, upload.single('image'), async (req, res) => {
   const { home, away, competition, kickoff, winProb, kitColor, kitNumber, prediction, accent, caption } = req.body
-  if (!kickoff) {
-    if (req.file) try { fs.unlinkSync(path.join(UPLOADS_DIR, req.file.filename)) } catch {}
-    return res.status(400).json({ error: 'kickoff is required' })
-  }
   try {
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : ''
     const { rows: [tip] } = await pool.query(`
@@ -64,7 +60,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `, [
-      home || '', away || '', competition || '', kickoff,
+      home || '', away || '', competition || '', kickoff || '',
       parseInt(winProb) || 75,
       kitColor   || '#FFD700',
       kitNumber  || '10',
@@ -107,7 +103,8 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       kickoff    !== undefined ? kickoff    : existing[0].kickoff,
       winProb    !== undefined ? parseInt(winProb) : existing[0].win_prob,
       prediction !== undefined ? prediction : (existing[0].prediction || ''),
-      imageUrl
+      imageUrl,
+      id
     ])
     res.json(rowToTip(tip))
   } catch (err) {

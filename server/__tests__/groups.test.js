@@ -48,8 +48,17 @@ function buildPool () {
       is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
       special_price NUMERIC(12,2),
       special_odds  VARCHAR(50),
+      subscription_deadline VARCHAR(16),
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    )
+  `)
+
+  db.public.none(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id       SERIAL PRIMARY KEY,
+      group_id INTEGER REFERENCES groups(id),
+      status   VARCHAR(20) NOT NULL DEFAULT 'pending'
     )
   `)
 
@@ -279,6 +288,45 @@ describe('PATCH /api/groups/:id — admin update', () => {
     expect(found).toBeUndefined()
   })
 
+  test('admin can deactivate a package after its deadline has passed', async () => {
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = true, subscription_deadline = '2000-01-01T12:00' WHERE id = $1`,
+      [weeklyOdd5Id]
+    )
+
+    const res = await request.patch(`/api/groups/${weeklyOdd5Id}`)
+      .set(authHeader())
+      .send({ isActive: false })
+
+    expect(res.status).toBe(200)
+    expect(res.body.isActive).toBe(false)
+    expect(res.body.subscriptionDeadline).toBe('2000-01-01T12:00')
+
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = true, subscription_deadline = NULL WHERE id = $1`,
+      [weeklyOdd5Id]
+    )
+  })
+
+  test('admin cannot activate a package with a past deadline', async () => {
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = false, subscription_deadline = '2000-01-01T12:00' WHERE id = $1`,
+      [weeklyOdd5Id]
+    )
+
+    const res = await request.patch(`/api/groups/${weeklyOdd5Id}`)
+      .set(authHeader())
+      .send({ isActive: true })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/past deadlines/)
+
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = true, subscription_deadline = NULL WHERE id = $1`,
+      [weeklyOdd5Id]
+    )
+  })
+
   test('admin can update betslip link and code', async () => {
     const res = await request.patch(`/api/groups/${weeklyOdd5Id}`)
       .set(authHeader())
@@ -306,6 +354,46 @@ describe('PATCH /api/groups/:id — admin update', () => {
 
   test('returns 401 without auth', async () => {
     const res = await request.patch(`/api/groups/${weeklyOdd5Id}`).send({ price: 1 })
+    expect(res.status).toBe(401)
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELETE /api/groups/:id — Admin delete
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('DELETE /api/groups/:id — admin delete', () => {
+  test('admin can delete a group referenced by subscriptions', async () => {
+    const { rows: [created] } = await global.__groupTestPool.query(`
+      INSERT INTO groups (name, odds_type, plan_type, price)
+      VALUES ('Temporary VIP', '2', 'daily', 5000)
+      RETURNING id
+    `)
+    await global.__groupTestPool.query(
+      `INSERT INTO subscriptions (group_id, status) VALUES ($1, 'pending')`,
+      [created.id]
+    )
+
+    const res = await request.delete(`/api/groups/${created.id}`).set(authHeader())
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.detachedSubscriptions).toBe(1)
+    expect(res.body.message).toContain('linked subscription')
+
+    const { rows: groupRows } = await global.__groupTestPool.query('SELECT id FROM groups WHERE id = $1', [created.id])
+    expect(groupRows.length).toBe(0)
+
+    const { rows: subRows } = await global.__groupTestPool.query('SELECT group_id FROM subscriptions WHERE status = $1', ['pending'])
+    expect(subRows.some(s => s.group_id === created.id)).toBe(false)
+  })
+
+  test('returns 404 for a non-existent group', async () => {
+    const res = await request.delete('/api/groups/99999').set(authHeader())
+    expect(res.status).toBe(404)
+  })
+
+  test('returns 401 without auth', async () => {
+    const res = await request.delete('/api/groups/1')
     expect(res.status).toBe(401)
   })
 })

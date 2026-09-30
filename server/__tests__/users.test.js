@@ -11,6 +11,7 @@
 process.env.JWT_SECRET = 'test-secret-key'
 
 const { newDb } = require('pg-mem')
+const jwt = require('jsonwebtoken')
 
 // ── Build an in-memory pg pool ──────────────────────────────────────────────
 function buildMemPool() {
@@ -21,6 +22,10 @@ function buildMemPool() {
       username      VARCHAR(200) NOT NULL,
       phone         VARCHAR(30) UNIQUE NOT NULL,
       password_hash VARCHAR(255),
+      security_answer_hash VARCHAR(255),
+      scam_warning  BOOLEAN NOT NULL DEFAULT FALSE,
+      blacklisted   BOOLEAN NOT NULL DEFAULT FALSE,
+      blacklisted_at TIMESTAMPTZ,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `)
@@ -38,6 +43,7 @@ jest.mock('../db', () => {
 // ── Lazy-require app AFTER mock is registered ────────────────────────────────
 let request
 let app
+const ADMIN_TOKEN = jwt.sign({ id: 1, username: 'admin', role: 'owner' }, process.env.JWT_SECRET, { expiresIn: '1h' })
 
 beforeAll(() => {
   const PoolCtor = buildMemPool()
@@ -55,7 +61,7 @@ afterAll(async () => {
 async function registerBase() {
   return request
     .post('/api/users')
-    .send({ username: 'Alice', phone: '0700000001', password: 'secret123' })
+    .send({ username: 'Alice', phone: '0700000001', password: 'secret123', securityAnswer: 'blue' })
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -66,7 +72,7 @@ describe('POST /api/users — registration', () => {
   test('201: registers with valid username, phone, password', async () => {
     const res = await request
       .post('/api/users')
-      .send({ username: 'Bob', phone: '0700000010', password: 'pass1234' })
+      .send({ username: 'Bob', phone: '0700000010', password: 'pass1234', securityAnswer: 'blue' })
 
     expect(res.status).toBe(201)
     expect(res.body).toMatchObject({
@@ -82,7 +88,7 @@ describe('POST /api/users — registration', () => {
   test('400: missing username', async () => {
     const res = await request
       .post('/api/users')
-      .send({ phone: '0700000011', password: 'pass1234' })
+      .send({ phone: '0700000011', password: 'pass1234', securityAnswer: 'blue' })
 
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/required/)
@@ -91,7 +97,7 @@ describe('POST /api/users — registration', () => {
   test('400: missing phone', async () => {
     const res = await request
       .post('/api/users')
-      .send({ username: 'Carol', password: 'pass1234' })
+      .send({ username: 'Carol', password: 'pass1234', securityAnswer: 'blue' })
 
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/required/)
@@ -100,7 +106,7 @@ describe('POST /api/users — registration', () => {
   test('400: missing password', async () => {
     const res = await request
       .post('/api/users')
-      .send({ username: 'Carol', phone: '0700000012' })
+      .send({ username: 'Carol', phone: '0700000012', securityAnswer: 'blue' })
 
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/required/)
@@ -109,7 +115,7 @@ describe('POST /api/users — registration', () => {
   test('400: password shorter than 6 characters', async () => {
     const res = await request
       .post('/api/users')
-      .send({ username: 'Dave', phone: '0700000013', password: 'abc' })
+      .send({ username: 'Dave', phone: '0700000013', password: 'abc', securityAnswer: 'blue' })
 
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/6 characters/)
@@ -119,10 +125,65 @@ describe('POST /api/users — registration', () => {
     await registerBase()
     const res = await request
       .post('/api/users')
-      .send({ username: 'Alice2', phone: '0700000001', password: 'other123' })
+      .send({ username: 'Alice2', phone: '0700000001', password: 'other123', securityAnswer: 'blue' })
 
     expect(res.status).toBe(409)
     expect(res.body.error).toMatch(/already registered/)
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN FLAGS  PATCH /api/users/:id
+// ════════════════════════════════════════════════════════════════════════════
+describe('PATCH /api/users/:id — warning and blacklist flags', () => {
+  let aliceId
+
+  beforeAll(async () => {
+    const { rows } = await global.__testPool.query(`SELECT id FROM users WHERE phone = $1`, ['0700000001'])
+    aliceId = rows[0].id
+  })
+
+  test('admin can add and clear the scam warning badge', async () => {
+    const warned = await request.patch(`/api/users/${aliceId}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ scam_warning: true })
+
+    expect(warned.status).toBe(200)
+    expect(warned.body.scamWarning).toBe(true)
+
+    const cleared = await request.patch(`/api/users/${aliceId}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ scam_warning: false })
+
+    expect(cleared.status).toBe(200)
+    expect(cleared.body.scamWarning).toBe(false)
+  })
+
+  test('blacklist blocks login and can be reversed', async () => {
+    const blocked = await request.patch(`/api/users/${aliceId}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ blacklisted: true })
+
+    expect(blocked.status).toBe(200)
+    expect(blocked.body.blacklisted).toBe(true)
+
+    const deniedLogin = await request.post('/api/users/login')
+      .send({ phone: '0700000001', password: 'secret123' })
+
+    expect(deniedLogin.status).toBe(403)
+    expect(deniedLogin.body.error).toMatch(/blacklisted/)
+
+    const unblocked = await request.patch(`/api/users/${aliceId}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ blacklisted: false })
+
+    expect(unblocked.status).toBe(200)
+    expect(unblocked.body.blacklisted).toBe(false)
+
+    const allowedLogin = await request.post('/api/users/login')
+      .send({ phone: '0700000001', password: 'secret123' })
+
+    expect(allowedLogin.status).toBe(200)
   })
 })
 

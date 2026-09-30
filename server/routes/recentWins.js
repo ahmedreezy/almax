@@ -30,6 +30,7 @@ function rowToWin(row) {
     returned:   row.returned,
     odds:       row.odds,
     memberName: row.member_name,
+    caption:    row.caption || '',
     imageUrl:   row.image_url,
     createdAt:  row.created_at ? new Date(row.created_at).getTime() : null
   }
@@ -48,18 +49,14 @@ router.get('/', async (req, res) => {
 
 // POST a new win (admin)
 router.post('/', auth, upload.single('image'), async (req, res) => {
-  const { betType, date, staked, returned, odds, memberName } = req.body
-  if (!betType || !date || !staked || !returned || !odds) {
-    if (req.file) try { fs.unlinkSync(path.join(UPLOADS_DIR, req.file.filename)) } catch {}
-    return res.status(400).json({ error: 'betType, date, staked, returned, odds are required' })
-  }
+  const { betType, date, staked, returned, odds, memberName, caption } = req.body
   try {
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : ''
     const { rows: [win] } = await pool.query(`
-      INSERT INTO recent_wins (bet_type, date, staked, returned, odds, member_name, image_url)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      INSERT INTO recent_wins (bet_type, date, staked, returned, odds, member_name, image_url, caption)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *
-    `, [betType, date, staked, returned, odds, memberName || '', imageUrl])
+    `, [betType || 'Winning Proof', date || '', staked || '', returned || '', odds || '', memberName || '', imageUrl, caption || ''])
     res.status(201).json(rowToWin(win))
   } catch (err) {
     if (req.file) try { fs.unlinkSync(path.join(UPLOADS_DIR, req.file.filename)) } catch {}
@@ -77,7 +74,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 
     const win = rows[0]
     const sets = []; const vals = []; let i = 1
-    const fields = { bet_type: 'betType', date: 'date', staked: 'staked', returned: 'returned', odds: 'odds', member_name: 'memberName' }
+    const fields = { bet_type: 'betType', date: 'date', staked: 'staked', returned: 'returned', odds: 'odds', member_name: 'memberName', caption: 'caption' }
     for (const [col, key] of Object.entries(fields)) {
       if (req.body[key] !== undefined) { sets.push(`${col} = $${i++}`); vals.push(req.body[key]) }
     }

@@ -1,113 +1,82 @@
 <template>
   <div class="editor">
     <p class="editor-desc">
-      Manage today's <strong>Almax Predictions</strong>. Upload an image and write a caption — the card displays those prominently with win probability and a locked expert tip for VIPs.
+      Manage Today's Almax Picks with one photo, one caption, and the win probability shown on the public card.
     </p>
 
-    <!-- Current tips list -->
-    <div v-if="loading" class="state-msg">Loading predictions…</div>
+    <div v-if="loading" class="state-msg">Loading picks...</div>
     <div v-else>
-      <div v-if="tips.length === 0" class="empty-state">No predictions added yet. Add your first one below.</div>
-      <div v-else class="tips-list">
-        <div v-for="tip in tips" :key="tip.id" class="tip-row">
-
-          <!-- Inline edit overlay -->
-          <div v-if="editingId === tip.id" class="edit-overlay">
-            <div class="edit-img-row">
-              <img v-if="editPreview || tip.imageUrl" :src="editPreview || ('/api/' + tip.imageUrl)" class="edit-preview-img" alt="Preview" />
-              <div v-else class="no-img-ph">📷 No image</div>
-              <label class="replace-photo-btn" :for="'edit-img-' + tip.id">🔄 Replace Image</label>
-              <input :id="'edit-img-' + tip.id" type="file" accept="image/*" class="hidden-file" @change="onEditFile" />
-            </div>
-            <div class="edit-fields">
-              <div class="edit-field full">
-                <label>Caption</label>
-                <input v-model="editForm.caption" type="text" placeholder="e.g. Arsenal look unstoppable this week…" />
+      <div v-if="tips.length === 0" class="empty-state">No picks added yet. Add the first one below.</div>
+      <div v-else class="media-grid">
+        <div v-for="tip in tips" :key="tip.id" class="media-item">
+          <div v-if="editingId === tip.id" class="edit-panel">
+            <MediaUploadCard
+              v-model:image="editFile"
+              v-model:caption="editForm.caption"
+              :preview-src="imageSrc(tip)"
+              :input-id="'pick-caption-' + tip.id"
+            >
+              <div class="prob-field">
+                <label>Win Probability</label>
+                <input v-model.number="editForm.winProb" type="number" min="1" max="99" />
               </div>
-              <div class="edit-fields-row">
-                <div class="edit-field">
-                  <label>Kick-off</label>
-                  <input v-model="editForm.kickoff" type="text" placeholder="e.g. 20:00" />
-                </div>
-                <div class="edit-field">
-                  <label>Win % </label>
-                  <input v-model.number="editForm.winProb" type="number" min="1" max="99" placeholder="75" />
-                </div>
+              <div class="prob-field">
+                <label>Linked VIP Package</label>
+                <select v-model="editForm.groupId" class="pkg-select">
+                  <option :value="null">— No linked package —</option>
+                  <option v-for="p in packages" :key="p.id" :value="p.id">{{ p.name }} ({{ p.planType }})</option>
+                </select>
               </div>
-              <div class="edit-field full">
-                <label>Expert Tip (🔒 hidden)</label>
-                <input v-model="editForm.prediction" type="text" placeholder="e.g. Over 2.5 Goals" />
-              </div>
-            </div>
-            <div class="edit-actions">
-              <button class="save-inline-btn" @click="saveEdit(tip.id)" :disabled="editSaving">{{ editSaving ? 'Saving…' : '✓ Save' }}</button>
-              <button class="cancel-edit-btn" @click="cancelEdit">Cancel</button>
-              <span v-if="editError" class="error-msg">⚠ {{ editError }}</span>
+            </MediaUploadCard>
+            <div class="actions-row">
+              <button class="save-btn" @click="saveEdit(tip.id)" :disabled="editSaving">
+                {{ editSaving ? 'Saving...' : 'Save Changes' }}
+              </button>
+              <button class="ghost-btn" @click="cancelEdit">Cancel</button>
+              <span v-if="editError" class="error-msg">{{ editError }}</span>
             </div>
           </div>
 
-          <!-- Normal row view -->
           <template v-else>
-            <img v-if="tip.imageUrl" :src="'/api/' + tip.imageUrl" class="tip-thumb" alt="" />
-            <div class="tip-info">
-              <span class="tip-caption">{{ tip.caption || '(no caption)' }}</span>
-              <span class="tip-comp">⏰ {{ tip.kickoff }} · {{ tip.winProb }}% win prob</span>
-              <span v-if="tip.prediction" class="tip-pred">🔒 {{ tip.prediction }}</span>
+            <img v-if="imageSrc(tip)" :src="imageSrc(tip)" class="media-img" :alt="tip.caption || 'Almax pick'" style="cursor:zoom-in" @click="$lightbox.open(imageSrc(tip))" />
+            <div v-else class="media-placeholder">Photo</div>
+            <div class="media-body">
+              <p>{{ tip.caption || 'No caption added' }}</p>
+              <span>{{ normalizedWinProb(tip) }}% win probability</span>
+              <span v-if="tip.groupId" class="pkg-link-badge">👑 {{ linkedPkgName(tip) }}</span>
+              <span v-else class="pkg-link-badge pkg-link-none">No package linked</span>
             </div>
-            <div class="tip-meta">
-              <button class="edit-btn" @click="startEdit(tip)">✏ Edit</button>
-              <button class="delete-btn" @click="deleteTip(tip.id)" title="Delete">🗑 Delete</button>
+            <div class="card-actions">
+              <button class="edit-btn" @click="startEdit(tip)">Edit</button>
+              <button class="delete-btn" @click="deleteTip(tip.id)">Delete</button>
             </div>
           </template>
-
         </div>
       </div>
 
-      <!-- Add tip form -->
       <div class="add-section">
-        <h3 class="add-title">Add New Prediction</h3>
+        <h3 class="add-title">Add Today's Pick</h3>
         <form @submit.prevent="addTip" class="editor-form">
-
-          <!-- Image upload (prominent) -->
-          <div class="field full-field">
-            <label>Match Image <span class="req">*</span></label>
-            <div class="img-upload-row">
-              <label class="img-upload-btn" for="pick-img-input">📷 Choose Image</label>
-              <input id="pick-img-input" type="file" accept="image/*" @change="onImageChange" class="hidden-file" />
-              <span v-if="imageFile" class="img-filename">{{ imageFile.name }}</span>
-              <span v-else class="img-filename muted">No file chosen</span>
+          <MediaUploadCard v-model:image="imageFile" v-model:caption="newTip.caption" input-id="new-pick-caption">
+            <div class="prob-field">
+              <label>Win Probability</label>
+              <input v-model.number="newTip.winProb" type="number" min="1" max="99" />
             </div>
-            <img v-if="imagePreview" :src="imagePreview" class="img-preview" alt="Preview" />
-          </div>
-
-          <!-- Caption -->
-          <div class="field full-field">
-            <label>Caption <span class="req">*</span></label>
-            <input v-model="newTip.caption" type="text" placeholder="e.g. Arsenal are in fine form heading into this clash" required />
-          </div>
-
-          <div class="fields-row">
-            <div class="field">
-              <label>Kick-off Time <span class="req">*</span></label>
-              <input v-model="newTip.kickoff" type="text" placeholder="e.g. 20:00" required />
+            <div class="prob-field">
+              <label>Linked VIP Package</label>
+              <select v-model="newTip.groupId" class="pkg-select">
+                <option :value="null">— No linked package —</option>
+                <option v-for="p in packages" :key="p.id" :value="p.id">{{ p.name }} ({{ p.planType }})</option>
+              </select>
             </div>
-            <div class="field">
-              <label>Win Probability (%)</label>
-              <input v-model.number="newTip.winProb" type="number" min="1" max="99" placeholder="e.g. 78" />
-            </div>
-          </div>
+          </MediaUploadCard>
 
-          <div class="field full-field">
-            <label>Expert Tip / Pick <span class="hint">(🔒 hidden from non-VIP users)</span></label>
-            <input v-model="newTip.prediction" type="text" placeholder="e.g. Over 2.5 Goals, Both Teams Score" />
-          </div>
-
-          <div class="form-actions">
+          <div class="actions-row">
             <button type="submit" class="save-btn" :disabled="saving">
-              {{ saving ? 'Adding…' : '+ Add Prediction' }}
+              {{ saving ? 'Adding...' : 'Add Pick' }}
             </button>
-            <span v-if="saved" class="saved-msg">✓ Added!</span>
-            <span v-if="saveError" class="error-msg">⚠ {{ saveError }}</span>
+            <span v-if="saved" class="saved-msg">Saved</span>
+            <span v-if="saveError" class="error-msg">{{ saveError }}</span>
           </div>
         </form>
       </div>
@@ -117,49 +86,77 @@
 
 <script>
 import adminApi from '../../utils/adminApi'
+import { getApiBaseUrl } from '../../utils/apiBase'
+import MediaUploadCard from './MediaUploadCard.vue'
+
+const API = getApiBaseUrl()
 
 export default {
   name: 'FootballTipsEditor',
+  components: { MediaUploadCard },
   data() {
     return {
       tips: [],
+      packages: [],
       loading: true,
       saving: false,
       saved: false,
       saveError: '',
       imageFile: null,
-      imagePreview: null,
-      newTip: {
-        caption: '', kickoff: '', winProb: 75, prediction: ''
-      },
+      newTip: { caption: '', winProb: 75, groupId: null },
       editingId: null,
-      editForm: { caption: '', kickoff: '', winProb: 75, prediction: '' },
+      editForm: { caption: '', winProb: 75, groupId: null },
       editFile: null,
-      editPreview: null,
       editSaving: false,
       editError: ''
     }
   },
   async mounted() {
-    await this.loadTips()
+    await Promise.all([this.loadTips(), this.loadPackages()])
   },
   methods: {
+    async loadPackages() {
+      try {
+        const { data } = await adminApi.get('/api/groups/admin')
+        this.packages = data.map(g => ({
+          id: g.id,
+          name: g.name,
+          planType: g.planType ?? g.plan_type ?? ''
+        }))
+      } catch {
+        // non-critical — dropdown stays empty
+      }
+    },
+    linkedPkgName(tip) {
+      if (!tip.groupId) return ''
+      const pkg = this.packages.find(p => p.id === tip.groupId)
+      return pkg ? pkg.name : 'Package #' + tip.groupId
+    },
     async loadTips() {
       this.loading = true
       try {
         const { data } = await adminApi.get('/api/football-tips')
-        this.tips = data
+        this.tips = data || []
       } catch {
-        // Server unavailable
+        this.tips = []
       } finally {
         this.loading = false
       }
     },
-    onImageChange(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      this.imageFile = file
-      this.imagePreview = URL.createObjectURL(file)
+    imageSrc(tip) {
+      const url = tip.imageUrl || tip.image_url || ''
+      if (!url) return ''
+      if (/^(https?:|data:|blob:)/.test(url)) return url
+      return API + url
+    },
+    normalizedWinProb(tip) {
+      return tip.winProb || tip.win_prob || 75
+    },
+    appendTipFields(fd, source) {
+      fd.append('caption', source.caption || '')
+      fd.append('winProb', source.winProb || 75)
+      if (source.groupId != null) fd.append('group_id', source.groupId)
+      else fd.append('group_id', '')
     },
     async addTip() {
       this.saving = true
@@ -167,70 +164,55 @@ export default {
       this.saveError = ''
       try {
         const fd = new FormData()
-        fd.append('caption',    this.newTip.caption)
-        fd.append('kickoff',    this.newTip.kickoff)
-        fd.append('winProb',    this.newTip.winProb)
-        fd.append('prediction', this.newTip.prediction)
+        this.appendTipFields(fd, this.newTip)
         if (this.imageFile) fd.append('image', this.imageFile)
-        const { data } = await adminApi.post('/api/football-tips', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-        this.tips.push(data)
+        const { data } = await adminApi.post('/api/football-tips', fd)
+        this.tips.unshift(data)
         this.saved = true
-        this.newTip = { caption: '', kickoff: '', winProb: 75, prediction: '' }
+        this.newTip = { caption: '', winProb: 75, groupId: null }
         this.imageFile = null
-        this.imagePreview = null
-        setTimeout(() => { this.saved = false }, 3000)
+        setTimeout(() => { this.saved = false }, 2500)
       } catch {
         this.saveError = 'Failed to save. Make sure the server is running.'
       } finally {
         this.saving = false
       }
     },
-    async deleteTip(id) {
-      if (!confirm('Delete this prediction?')) return
-      try {
-        await adminApi.delete('/api/football-tips/' + id)
-        this.tips = this.tips.filter(t => t.id !== id)
-      } catch {
-        alert('Delete failed. Make sure the server is running.')
-      }
-    },
     startEdit(tip) {
       this.editingId = tip.id
-      this.editForm = { caption: tip.caption || '', kickoff: tip.kickoff || '', winProb: tip.winProb || 75, prediction: tip.prediction || '' }
+      this.editForm = { caption: tip.caption || '', winProb: this.normalizedWinProb(tip), groupId: tip.groupId ?? null }
       this.editFile = null
-      this.editPreview = null
       this.editError = ''
     },
     cancelEdit() {
       this.editingId = null
       this.editFile = null
-      this.editPreview = null
       this.editError = ''
-    },
-    onEditFile(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      this.editFile = file
-      this.editPreview = URL.createObjectURL(file)
     },
     async saveEdit(id) {
       this.editSaving = true
       this.editError = ''
       try {
         const fd = new FormData()
-        fd.append('caption',    this.editForm.caption)
-        fd.append('kickoff',    this.editForm.kickoff)
-        fd.append('winProb',    this.editForm.winProb)
-        fd.append('prediction', this.editForm.prediction)
+        this.appendTipFields(fd, this.editForm)
         if (this.editFile) fd.append('image', this.editFile)
-        const { data } = await adminApi.put('/api/football-tips/' + id, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+        const { data } = await adminApi.post('/api/football-tips/' + id, fd)
         const idx = this.tips.findIndex(t => t.id === id)
         if (idx !== -1) this.tips.splice(idx, 1, data)
         this.cancelEdit()
       } catch {
-        this.editError = 'Save failed. Make sure the server is running.'
+        this.editError = 'Save failed.'
       } finally {
         this.editSaving = false
+      }
+    },
+    async deleteTip(id) {
+      if (!confirm('Delete this pick?')) return
+      try {
+        await adminApi.delete('/api/football-tips/' + id)
+        this.tips = this.tips.filter(t => t.id !== id)
+      } catch {
+        alert('Delete failed. Make sure the server is running.')
       }
     }
   }
@@ -238,76 +220,35 @@ export default {
 </script>
 
 <style scoped>
-.editor { max-width: 760px; }
-.editor-desc { font-size: 14px; color: #888; margin-bottom: 24px; line-height: 1.6; }
-.state-msg { padding: 14px 18px; border-radius: 10px; background: #1a1a1a; font-size: 14px; color: #888; margin-bottom: 24px; }
-.empty-state { padding: 20px; text-align: center; color: #555; font-size: 14px; background: #111; border-radius: 10px; margin-bottom: 24px; }
-
-.tips-list { background: #111; border: 1px solid rgba(255,215,0,0.1); border-radius: 14px; overflow: hidden; margin-bottom: 32px; }
-.tip-row { border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; padding: 12px 16px; gap: 12px; }
-.tip-row:last-child { border-bottom: none; }
-
-/* Edit mode — stretch full width */
-.tip-row:has(.edit-overlay) { display: block; padding: 0; }
-.tip-thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
-.tip-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.tip-caption { font-size: 14px; font-weight: 700; color: #fff; }
-.tip-comp { font-size: 12px; color: #666; }
-.tip-pred { font-size: 11px; color: #FFD700; opacity: 0.7; }
-.tip-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.edit-btn { background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.2); color: #FFD700; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-.edit-btn:hover { background: rgba(255,215,0,0.16); }
-.delete-btn { background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.2); color: #ff5252; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-.delete-btn:hover { background: rgba(255,82,82,0.18); }
-
-/* Inline edit overlay */
-.edit-overlay { padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #1a1a1a; }
-.edit-img-row { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.edit-preview-img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; }
-.no-img-ph { width: 100%; height: 70px; background: #111; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #444; font-size: 13px; }
-.replace-photo-btn { font-size: 11px; font-weight: 700; color: #FFD700; cursor: pointer; background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.2); border-radius: 6px; padding: 5px 10px; user-select: none; transition: background 0.2s; }
-.replace-photo-btn:hover { background: rgba(255,215,0,0.16); }
-.edit-fields { display: flex; flex-direction: column; gap: 8px; }
-.edit-fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.edit-field { display: flex; flex-direction: column; gap: 4px; }
-.edit-field.full { grid-column: 1 / -1; }
-.edit-field label { font-size: 10px; font-weight: 700; color: #888; letter-spacing: 1px; text-transform: uppercase; }
-.edit-field input { background: #111; border: 1px solid rgba(255,215,0,0.15); border-radius: 7px; padding: 8px 10px; color: #fff; font-size: 13px; outline: none; transition: border-color 0.2s; }
-.edit-field input:focus { border-color: rgba(255,215,0,0.45); }
-.edit-field input::placeholder { color: #444; }
-.edit-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.save-inline-btn { background: linear-gradient(135deg,#FFD700,#FFA500); color: #000; border: none; border-radius: 7px; padding: 8px 16px; font-size: 12px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
-.save-inline-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.cancel-edit-btn { background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 7px; padding: 8px 14px; color: #aaa; font-size: 12px; cursor: pointer; transition: border-color 0.2s; }
-.cancel-edit-btn:hover { border-color: rgba(255,255,255,0.35); color: #fff; }
-
-.add-title { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 16px; }
-
-.editor-form { background: #111; border: 1px solid rgba(255,215,0,0.1); border-radius: 14px; padding: 24px; }
-.fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.field { display: flex; flex-direction: column; gap: 7px; }
-.full-field { margin-bottom: 16px; }
-.field label { font-size: 11px; font-weight: 700; color: #888; letter-spacing: 1px; text-transform: uppercase; }
-.req { color: #FFD700; }
-.hint { text-transform: none; font-weight: 400; color: #555; letter-spacing: 0; font-size: 11px; }
-.field input[type="text"],
-.field input[type="number"] { background: #1a1a1a; border: 1px solid rgba(255,215,0,0.15); border-radius: 8px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s; }
-.field input:focus { border-color: rgba(255,215,0,0.45); }
-.field input::placeholder { color: #444; }
-.hidden-file { display: none; }
-.img-upload-row { display: flex; align-items: center; gap: 12px; }
-.img-upload-btn { background: #1a1a1a; border: 1px solid rgba(255,215,0,0.2); color: #FFD700; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
-.img-upload-btn:hover { background: rgba(255,215,0,0.08); }
-.img-filename { font-size: 12px; color: #888; }
-.img-filename.muted { color: #444; }
-.img-preview { margin-top: 10px; width: 100%; max-width: 320px; border-radius: 8px; object-fit: cover; max-height: 180px; }
-
-.form-actions { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
-.save-btn { background: linear-gradient(135deg,#FFD700,#FFA500); color: #000; border: none; border-radius: 9px; padding: 12px 28px; font-size: 14px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.saved-msg { color: #4caf50; font-size: 13px; font-weight: 600; }
+.editor { max-width: 920px; }
+.editor-desc { color: rgba(255,255,255,0.58); font-size: 14px; line-height: 1.7; margin-bottom: 22px; border-left: 3px solid #FFD700; padding: 12px 0 12px 16px; }
+.state-msg, .empty-state { background: #111; border-radius: 10px; color: #888; font-size: 14px; margin-bottom: 22px; padding: 16px; text-align: center; }
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; margin-bottom: 30px; }
+.media-item { background: #0e0e0e; border: 1px solid rgba(255, 215, 0, 0.12); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+.media-item:hover { border-color: rgba(255,215,0,0.32); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.38); }
+.media-img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; transition: transform 0.35s; }
+.media-item:hover .media-img { transform: scale(1.03); }
+.media-placeholder { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; color: #555; background: #080808; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.media-body { padding: 12px 14px 8px; flex: 1; }
+.media-body p { color: #fff; font-size: 13px; line-height: 1.55; margin: 0 0 6px; }
+.media-body span { color: #FFD700; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+.card-actions { display: flex; gap: 8px; padding: 0 12px 12px; }
+.edit-panel { padding: 14px; }
+.pkg-select { width: 100%; background: #111; border: 1px solid rgba(255,215,0,0.2); border-radius: 8px; color: #fff; font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer; margin-top: 4px; }
+.pkg-select option { background: #111; }
+.pkg-link-badge { display: block; margin-top: 6px; font-size: 11px; font-weight: 700; color: #FFD700; letter-spacing: 0.3px; }
+.pkg-link-none { color: #555; font-weight: 400; }
+.add-section { margin-top: 28px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.07); }
+.add-title { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; margin: 0 0 18px; }
+.editor-form { display: flex; flex-direction: column; gap: 16px; }
+.prob-field { display: flex; flex-direction: column; gap: 8px; }
+.prob-field label { color: #888; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.prob-field input { background: #1a1a1a; border: 1px solid rgba(255, 215, 0, 0.16); border-radius: 9px; color: #fff; font-size: 14px; max-width: 180px; outline: none; padding: 11px 13px; }
+.actions-row { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.save-btn, .edit-btn { background: linear-gradient(135deg, #FFD700, #FFA500); border: none; border-radius: 9px; color: #000; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 40px; padding: 10px 18px; }
+.ghost-btn, .delete-btn { background: #1a1a1a; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; color: #ddd; cursor: pointer; font-size: 13px; font-weight: 700; padding: 10px 14px; }
+.delete-btn { color: #ff8a65; }
+.save-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.saved-msg { color: #4caf50; font-size: 13px; font-weight: 700; }
 .error-msg { color: #ff5252; font-size: 13px; }
-
-@media (max-width: 600px) { .fields-row { grid-template-columns: 1fr; } }
 </style>
-

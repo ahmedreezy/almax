@@ -1,5 +1,5 @@
 require('dotenv').config()
-const { pool } = require('./db')
+const { pool, isInMemory } = require('./db')
 
 async function migrate() {
   const client = await pool.connect()
@@ -9,6 +9,7 @@ async function migrate() {
         id            SERIAL PRIMARY KEY,
         username      VARCHAR(100) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        role          VARCHAR(20)  NOT NULL DEFAULT 'owner',
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -17,6 +18,9 @@ async function migrate() {
         username      VARCHAR(200) NOT NULL,
         phone         VARCHAR(30) UNIQUE NOT NULL,
         password_hash VARCHAR(255),
+        scam_warning  BOOLEAN NOT NULL DEFAULT FALSE,
+        blacklisted   BOOLEAN NOT NULL DEFAULT FALSE,
+        blacklisted_at TIMESTAMPTZ,
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -48,6 +52,9 @@ async function migrate() {
         payment_method  VARCHAR(20),
         phone           VARCHAR(30) DEFAULT '',
         status          VARCHAR(20) DEFAULT 'pending',
+        agent_commission_amount NUMERIC(12,2),
+        agent_commission_status VARCHAR(20),
+        agent_commission_tracked_at TIMESTAMPTZ,
         created_at      TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -87,6 +94,7 @@ async function migrate() {
         odds        VARCHAR(50)  NOT NULL,
         member_name VARCHAR(200) DEFAULT '',
         image_url   VARCHAR(500) DEFAULT '',
+        caption     TEXT         DEFAULT '',
         created_at  TIMESTAMPTZ  DEFAULT NOW()
       );
 
@@ -123,6 +131,7 @@ async function migrate() {
         time        VARCHAR(20)  DEFAULT '20:45',
         competition VARCHAR(200) DEFAULT 'Premier League',
         image_url   VARCHAR(500) DEFAULT '',
+        caption     TEXT         DEFAULT '',
         updated_at  TIMESTAMPTZ  DEFAULT NOW()
       );
     `)
@@ -130,8 +139,12 @@ async function migrate() {
 
     // Column additions for schema evolution — safe to run on existing DBs
     await client.query(`
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'owner';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash          VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hash  VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS scam_warning          BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS blacklisted           BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS blacklisted_at        TIMESTAMPTZ;
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS betslip_link     VARCHAR(500) DEFAULT '';
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS betslip_code     VARCHAR(100) DEFAULT '';
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
@@ -140,6 +153,19 @@ async function migrate() {
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS expires_at       TIMESTAMPTZ;
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS secret_code_hash VARCHAR(255) DEFAULT '';
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS odds_type        VARCHAR(20)  DEFAULT '2';
+      ALTER TABLE recent_wins    ADD COLUMN IF NOT EXISTS caption        TEXT         DEFAULT '';
+      ALTER TABLE free_odd2      ADD COLUMN IF NOT EXISTS caption        TEXT         DEFAULT '';
+      ALTER TABLE football_tips  ADD COLUMN IF NOT EXISTS caption        TEXT         DEFAULT '';
+      ALTER TABLE football_tips  ADD COLUMN IF NOT EXISTS image_url      VARCHAR(500) DEFAULT '';
+    `)
+    await client.query(`
+      UPDATE admin_users
+      SET role = 'owner'
+      WHERE role IS NULL OR role = '';
+
+      UPDATE admin_users
+      SET role = 'developer'
+      WHERE LOWER(username) IN ('almaxdev', 'developer', 'dev');
     `)
     console.log('✓ Core column migrations applied.')
 
@@ -166,19 +192,24 @@ async function migrate() {
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_special    BOOLEAN      NOT NULL DEFAULT FALSE;
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS is_active     BOOLEAN      NOT NULL DEFAULT TRUE;
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS special_price NUMERIC(12,2);
+      ALTER TABLE groups ADD COLUMN IF NOT EXISTS special_odds  VARCHAR(50);
+      ALTER TABLE groups ADD COLUMN IF NOT EXISTS subscription_deadline VARCHAR(16);
+      ALTER TABLE groups ALTER COLUMN subscription_deadline TYPE VARCHAR(16);
     `)
 
     // Ensure UNIQUE constraint on groups.name exists (for ON CONFLICT upserts)
-    await client.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint
-          WHERE conrelid = 'groups'::regclass AND conname = 'groups_name_key'
-        ) THEN
-          ALTER TABLE groups ADD CONSTRAINT groups_name_key UNIQUE (name);
-        END IF;
-      END $$;
-    `)
+    if (!isInMemory) {
+      await client.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = 'groups'::regclass AND conname = 'groups_name_key'
+          ) THEN
+            ALTER TABLE groups ADD CONSTRAINT groups_name_key UNIQUE (name);
+          END IF;
+        END $$;
+      `)
+    }
 
     // ─── Link subscriptions → groups + payment references ───────────────────
     await client.query(`
@@ -186,6 +217,9 @@ async function migrate() {
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100);
       ALTER TABLE payments      ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100);
       ALTER TABLE payments      ADD COLUMN IF NOT EXISTS transaction_id    VARCHAR(200);
+      ALTER TABLE payments      ADD COLUMN IF NOT EXISTS agent_commission_amount NUMERIC(12,2);
+      ALTER TABLE payments      ADD COLUMN IF NOT EXISTS agent_commission_status VARCHAR(20);
+      ALTER TABLE payments      ADD COLUMN IF NOT EXISTS agent_commission_tracked_at TIMESTAMPTZ;
     `)
     console.log('✓ Migration complete — all tables and columns up to date.')
   } finally {

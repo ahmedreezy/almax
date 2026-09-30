@@ -4,6 +4,50 @@ const https    = require('https')
 const http     = require('http')
 const { pool } = require('../db')
 const auth     = require('../middleware/authMiddleware')
+const { trackCommissionForSubscription } = require('../utils/commission')
+
+function kampalaNowInput() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Kampala',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(new Date()).reduce((acc, part) => {
+    acc[part.type] = part.value
+    return acc
+  }, {})
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
+}
+
+function normalizeDeadlineForCompare(value) {
+  if (!value) return ''
+  const deadline = String(value)
+  if (/^\d{2}:\d{2}$/.test(deadline)) return `${kampalaNowInput().slice(0, 10)}T${deadline}`
+  return deadline.slice(0, 16)
+}
+
+function isDeadlineClosed(value) {
+  const deadline = normalizeDeadlineForCompare(value)
+  return !!deadline && kampalaNowInput() > deadline
+}
+
+function rowToGroup(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    oddsType: row.odds_type,
+    planType: row.plan_type,
+    price: parseFloat(row.price),
+    isSpecial: row.is_special || false,
+    isActive: row.is_active !== false,
+    specialPrice: row.special_price != null ? parseFloat(row.special_price) : null,
+    subscriptionDeadline: row.subscription_deadline || null,
+    isClosed: isDeadlineClosed(row.subscription_deadline)
+  }
+}
 
 // ─── Jpesa STK Push helper ────────────────────────────────────────────────────
 // Jpesa's PHP sample disables SSL verification (CURLOPT_SSL_VERIFYPEER=>0).
@@ -35,6 +79,10 @@ function httpPost (urlStr, body, headers) {
 }
 
 async function initiateSTKPush ({ phone, amount, reference }) {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: false, reference, pending: true, message: 'Payment provider skipped in tests.' }
+  }
+
   const apiKey      = process.env.JPESA_API_KEY || '79F36A45DE71FF4196A5C0920C5ECD7B'
   const apiUrl      = process.env.JPESA_API_URL || 'https://my.jpesa.com/api/'
   const callbackUrl = process.env.JPESA_CALLBACK_URL || 'https://www.almaxpredictions.com/api/payments/webhook'
@@ -114,6 +162,17 @@ const SUB_SELECT = `
 // GET all subscriptions (admin)
 router.get('/', auth, async (req, res) => {
   try {
+    // Timeout pending subscriptions/payments older than 1 hour
+    await pool.query(`
+      UPDATE payments SET status = 'failed'
+      WHERE status = 'pending'
+        AND subscription_id IN (
+          SELECT id FROM subscriptions
+          WHERE status = 'pending'
+            AND created_at < NOW() - INTERVAL '1 hour'
+        )
+    `)
+    await pool.query(`UPDATE subscriptions SET status = 'failed' WHERE status = 'pending' AND created_at < NOW() - INTERVAL '1 hour'`)
     await pool.query(`UPDATE subscriptions SET status = 'expired' WHERE status = 'active' AND expires_at < NOW()`)
     const { rows } = await pool.query(SUB_SELECT + ' ORDER BY s.created_at DESC')
     res.json(rows.map(r => rowToSub(r, true)))
@@ -123,10 +182,13 @@ router.get('/', auth, async (req, res) => {
   }
 })
 
-// GET subscriptions for a specific user (public)
-router.get('/user/:userId', async (req, res) => {
+// GET subscriptions for the signed-in user. Admin tokens may inspect any user.
+router.get('/user/:userId', auth, async (req, res) => {
   const userId = parseInt(req.params.userId, 10)
   if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' })
+  if (req.admin?.role === 'user' && Number(req.admin.id) !== userId) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
   try {
     await pool.query(`UPDATE subscriptions SET status = 'expired' WHERE status = 'active' AND expires_at < NOW()`)
     const { rows } = await pool.query(SUB_SELECT + ' WHERE s.user_id = $1 ORDER BY s.created_at DESC', [userId])
@@ -181,10 +243,59 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'Special odds are not available today. Check back later.' })
     }
 
+    if (isDeadlineClosed(group.subscription_deadline)) {
+      const { rows: alternativeRows } = await pool.query(`
+        SELECT * FROM groups
+        WHERE id <> $1
+          AND is_active = TRUE
+          AND (is_special = FALSE OR special_price IS NOT NULL)
+        ORDER BY price ASC
+      `, [parsedGroupId])
+      const alternatives = alternativeRows
+        .filter(g => !isDeadlineClosed(g.subscription_deadline))
+        .map(rowToGroup)
+      return res.status(422).json({
+        error: 'Package deadline has passed',
+        message: 'This VIP package is closed for new subscriptions. Please choose another available package.',
+        alternatives
+      })
+    }
+
     // Validate user
     const { rows: userRows } = await pool.query('SELECT id FROM users WHERE id = $1', [parsedUserId])
     if (userRows.length === 0)
       return res.status(400).json({ error: 'User not found' })
+
+    // Fail stale pending records for this user+group before checking for duplicates
+    await pool.query(`
+      UPDATE payments SET status = 'failed'
+      WHERE status = 'pending'
+        AND subscription_id IN (
+          SELECT id FROM subscriptions
+          WHERE status = 'pending'
+            AND user_id = $1
+            AND group_id = $2
+            AND created_at < NOW() - INTERVAL '1 hour'
+        )
+    `, [parsedUserId, parsedGroupId])
+    await pool.query(`
+      UPDATE subscriptions SET status = 'failed'
+      WHERE status = 'pending' AND user_id = $1 AND group_id = $2
+        AND created_at < NOW() - INTERVAL '1 hour'
+    `, [parsedUserId, parsedGroupId])
+
+    // Block rapid retries: reject if a pending record was created in the last 3 minutes
+    const { rows: dupRows } = await pool.query(`
+      SELECT id FROM subscriptions
+      WHERE user_id = $1 AND group_id = $2 AND status = 'pending'
+        AND created_at >= NOW() - INTERVAL '3 minutes'
+      LIMIT 1
+    `, [parsedUserId, parsedGroupId])
+    if (dupRows.length > 0) {
+      return res.status(409).json({
+        error: 'A payment is already in progress for this package. Approve the prompt or wait before retrying.'
+      })
+    }
 
     // Use special_price when applicable
     const effectiveAmount = (group.is_special && group.special_price)
@@ -193,10 +304,8 @@ router.post('/', async (req, res) => {
 
     const reference = `ALX-${parsedGroupId}-${parsedUserId}-${Date.now()}`
 
-    // Initiate STK push
-    const pushResult = await initiateSTKPush({ phone, amount: effectiveAmount, reference, paymentMethod })
-
-    // Insert subscription
+    // Insert pending records before the STK push. Jpesa can call back immediately,
+    // and the callback needs a saved reference/transaction id to match.
     const { rows: [sub] } = await pool.query(`
       INSERT INTO subscriptions
         (user_id, group_id, plan_type, odds_type, payment_method, phone, amount, status, payment_reference)
@@ -207,10 +316,21 @@ router.post('/', async (req, res) => {
     // Insert payment record
     const { rows: [payment] } = await pool.query(`
       INSERT INTO payments
-        (subscription_id, user_id, amount, plan_type, payment_method, phone, status, payment_reference)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+        (subscription_id, user_id, amount, plan_type, payment_method, phone, status, payment_reference, transaction_id)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)
       RETURNING *
-    `, [sub.id, parsedUserId, effectiveAmount, group.plan_type, paymentMethod, phone, reference])
+    `, [sub.id, parsedUserId, effectiveAmount, group.plan_type, paymentMethod, phone, reference, reference])
+
+    const pushResult = await initiateSTKPush({ phone, amount: effectiveAmount, reference, paymentMethod })
+
+    const providerTxnId = pushResult?.raw?.tid || pushResult?.raw?.transaction_id || pushResult?.raw?.txn_id || ''
+    if (providerTxnId) {
+      payment.transaction_id = providerTxnId
+      await pool.query(
+        `UPDATE payments SET transaction_id = $1 WHERE id = $2`,
+        [providerTxnId, payment.id]
+      )
+    }
 
     res.status(201).json({ subscription: rowToSub(sub, false), payment, paymentReference: reference, pushResult })
   } catch (err) {
@@ -246,6 +366,7 @@ router.patch('/:id', auth, async (req, res) => {
       `, [finalLink, finalCode, interval, id])
 
       await pool.query(`UPDATE payments SET status = 'confirmed' WHERE subscription_id = $1`, [id])
+      await trackCommissionForSubscription(pool, id)
       return res.json(rowToSub(updated, true))
     }
 

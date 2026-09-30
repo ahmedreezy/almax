@@ -117,7 +117,7 @@
         <div class="sub-top">
           <div class="sub-user">
             <span class="sub-name">{{ s.userName || 'Unknown' }}</span>
-            <span class="sub-phone">&#128222; {{ s.userPhone || s.phone || '&mdash;' }}</span>
+            <span class="sub-phone">{{ s.userPhone || s.phone || '&mdash;' }}</span>
           </div>
           <div class="sub-meta">
             <span :class="['plan-tag', s.planType]">{{ s.planType }}</span>
@@ -145,23 +145,23 @@
 
         <!-- Betslip info (active) -->
         <div v-if="s.status === 'active' && (s.betslipLink || s.betslipCode)" class="betslip-info">
-          <span v-if="s.betslipLink">&#128279; <a :href="s.betslipLink" target="_blank" rel="noopener">{{ s.betslipLink }}</a></span>
+          <span v-if="s.betslipLink">Link: <a :href="s.betslipLink" target="_blank" rel="noopener">{{ s.betslipLink }}</a></span>
           <span v-if="s.betslipCode">Code: <strong class="code">{{ s.betslipCode }}</strong></span>
         </div>
 
         <!-- Renew / Revoke (active or expired) -->
         <div v-if="s.status === 'active' || s.status === 'expired'" class="action-row">
           <button :class="['renew-btn', s.planType + '-renew']" @click="renewSub(s)" :disabled="renewing[s.id]">
-            {{ renewing[s.id] ? 'Renewing&hellip;' : '&#128260; Renew' }}
+            {{ renewing[s.id] ? 'Renewing&hellip;' : 'Renew' }}
           </button>
           <button v-if="s.status === 'active'" class="revoke-btn" @click="revokeSub(s)" :disabled="revoking[s.id]">
-            {{ revoking[s.id] ? 'Revoking&hellip;' : '&#128683; Revoke' }}
+            {{ revoking[s.id] ? 'Revoking&hellip;' : 'Revoke' }}
           </button>
         </div>
 
         <!-- Pending: show reference info only (activation is automatic) -->
         <div v-if="s.status === 'pending'" class="confirm-panel pending-info-panel">
-          <p class="pending-info-msg">&#9203; Waiting for payment confirmation from the provider. This will activate automatically.</p>
+          <p class="pending-info-msg">Waiting for payment confirmation from the provider. This will activate automatically.</p>
           <div class="pending-actions">
             <button class="pending-activate-btn" @click="reconcileSub(s, 'success')" :disabled="reconciling[s.id]">
               {{ reconciling[s.id] ? 'Applying…' : 'Mark as Paid' }}
@@ -172,7 +172,33 @@
           </div>
         </div>
 
-        <button v-if="s.status !== 'pending'" class="icon-del" @click="deleteSub(s.id)" title="Remove">&#128465;</button>
+        <!-- Admin edit panel (available on all statuses) -->
+        <div v-if="editing[s.id]" class="edit-panel">
+          <div class="edit-row">
+            <label class="edit-label">Set Status</label>
+            <select v-model="editStatus[s.id]" class="edit-select">
+              <option value="success">&#10003; Confirm as Paid (Activate)</option>
+              <option value="failed">&#10007; Mark as Failed / Revoke</option>
+            </select>
+          </div>
+          <div v-if="editStatus[s.id] === 'success'" class="edit-row">
+            <label class="edit-label">Transaction ID <span class="edit-optional">(optional)</span></label>
+            <input v-model="editTxnId[s.id]" type="text" class="edit-input" placeholder="e.g. MP123456789" />
+          </div>
+          <div class="edit-actions">
+            <button class="edit-save-btn" @click="saveEdit(s)" :disabled="editSaving[s.id]">
+              {{ editSaving[s.id] ? 'Saving\u2026' : 'Apply Change' }}
+            </button>
+            <button class="edit-cancel-btn" @click="editing = { ...editing, [s.id]: false }">Cancel</button>
+          </div>
+        </div>
+
+        <div class="card-footer-row">
+          <button class="edit-toggle-btn" @click="toggleEdit(s)">
+            {{ editing[s.id] ? '\u2715 Cancel Edit' : '\u270E Edit Payment' }}
+          </button>
+          <button v-if="s.status !== 'pending'" class="icon-del" @click="deleteSub(s.id)" title="Remove">Remove</button>
+        </div>
       </div>
     </div>
 
@@ -270,6 +296,10 @@ export default {
       groupsError: '',
       specialResetting: {},
       reconciling: {},
+      editing:     {},
+      editStatus:  {},
+      editTxnId:   {},
+      editSaving:  {},
       reportLoading: false,
       reportError: '',
       reportRange: {
@@ -570,6 +600,39 @@ export default {
         this.reconciling = { ...this.reconciling, [sub.id]: false }
       }
     },
+    toggleEdit(sub) {
+      const open = !this.editing[sub.id]
+      this.editing    = { ...this.editing,    [sub.id]: open }
+      this.editStatus = { ...this.editStatus, [sub.id]: 'success' }
+      this.editTxnId  = { ...this.editTxnId,  [sub.id]: sub.transactionId || '' }
+    },
+    async saveEdit(sub) {
+      const status = this.editStatus[sub.id]
+      if (!status) return
+      const actionLabel = status === 'success'
+        ? 'confirm this payment as paid (activate)'
+        : 'mark this payment as failed / revoke access'
+      if (!confirm('Are you sure you want to ' + actionLabel + '?')) return
+
+      this.editSaving = { ...this.editSaving, [sub.id]: true }
+      try {
+        const payload = {
+          subscriptionId: sub.id,
+          reference: sub.paymentReference,
+          status,
+          transactionId: this.editTxnId[sub.id] || null,
+          force: true,
+        }
+        const { data } = await adminApi.post('/api/payments/reconcile', payload)
+        if (data?.subscription) this.updateSub(sub.id, data.subscription)
+        this.editing = { ...this.editing, [sub.id]: false }
+        await this.fetchReport()
+      } catch {
+        alert('Could not apply change. Please try again.')
+      } finally {
+        this.editSaving = { ...this.editSaving, [sub.id]: false }
+      }
+    },
     async deleteSub(id) {
       if (!confirm('Delete this subscription record?')) return
       try {
@@ -584,15 +647,15 @@ export default {
 </script>
 
 <style scoped>
-.editor { max-width: 960px; }
-.editor-desc { font-size: 14px; color: #888; margin-bottom: 20px; line-height: 1.6; }
+.editor { max-width: 1120px; }
+.editor-desc { font-size: 14px; color: rgba(255,255,255,0.58); margin-bottom: 22px; line-height: 1.7; border-left: 3px solid #FFD700; padding: 12px 0 12px 16px; }
 .state-msg { font-size: 14px; color: #888; padding: 12px; }
 .empty-state { padding: 32px; text-align: center; color: #555; font-size: 14px; background: #111; border-radius: 10px; margin-bottom: 24px; }
 
 /* Report */
-.report-wrap { background: #101010; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 18px; }
-.report-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
-.report-title { margin: 0; font-size: 14px; color: #fff; font-weight: 800; letter-spacing: 0.4px; }
+.report-wrap { background: rgba(12,12,12,0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px; margin-bottom: 22px; }
+.report-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.report-title { margin: 0; font-size: 17px; color: #fff; font-weight: 900; letter-spacing: 0.2px; }
 .report-actions { display: flex; gap: 8px; align-items: center; }
 .report-refresh { padding: 7px 11px; border-radius: 8px; border: 1px solid rgba(255,215,0,0.25); background: rgba(255,215,0,0.08); color: #FFD700; font-size: 12px; font-weight: 700; cursor: pointer; }
 .report-refresh:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -606,28 +669,29 @@ export default {
 .report-reset { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); color: #bbb; }
 .report-apply:disabled,
 .report-reset:disabled { opacity: 0.55; cursor: not-allowed; }
-.period-presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.preset-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); color: #bbb; font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color 0.18s, color 0.18s, background 0.18s; }
+.period-presets { display: inline-flex; gap: 0; flex-wrap: nowrap; align-items: center; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
+.preset-btn { padding: 7px 12px; border-radius: 0; border: none; border-right: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #bbb; font-size: 12px; font-weight: 700; cursor: pointer; transition: border-color 0.18s, color 0.18s, background 0.18s; }
+.preset-btn:last-child { border-right: none; }
 .preset-btn:hover { border-color: rgba(255,215,0,0.3); color: #FFD700; }
 .preset-active { border-color: rgba(255,215,0,0.5) !important; background: rgba(255,215,0,0.1) !important; color: #FFD700 !important; }
-.report-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; }
-.report-card { background: #161616; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px; }
+.report-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+.report-card { background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07); border-left: 3px solid rgba(255,255,255,0.32); border-radius: 12px; padding: 15px; }
 .report-card--green { border-color: rgba(76,175,80,0.4); background: rgba(76,175,80,0.07); }
 .report-card--green .report-label { color: #81c784; }
 .report-card--green .report-value { color: #4caf50; }
 .report-label { font-size: 11px; color: #9a9a9a; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-.report-value { font-size: 18px; color: #fff; font-weight: 800; }
-.report-value--muted { font-size: 15px; color: #888; font-weight: 600; }
+.report-value { font-size: 26px; color: #fff; font-weight: 900; line-height: 1.1; }
+.report-value--muted { font-size: 19px; color: #ccc; font-weight: 800; }
 .report-sub { display: inline-block; font-size: 11px; color: #9a9a9a; font-weight: 600; margin-left: 4px; }
 
 /* Tier tabs */
-.tier-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-.tier-tab { display: flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 24px; border: 2px solid transparent; background: #111; color: #888; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.tier-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.tier-tab { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 11px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.035); color: #888; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
 .daily-tab.active   { border-color: #4fc3f7; color: #4fc3f7; background: rgba(79,195,247,0.08); }
 .weekly-tab.active  { border-color: #FFD700; color: #FFD700; background: rgba(255,215,0,0.08); }
 .monthly-tab.active { border-color: #fb8c00; color: #fb8c00; background: rgba(251,140,0,0.08); }
 .special-tab.active { border-color: #ab47bc; color: #ab47bc; background: rgba(171,71,188,0.08); }
-.tier-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.tier-dot { display: none; }
 .daily-dot   { background: #4fc3f7; }
 .weekly-dot  { background: #FFD700; }
 .monthly-dot { background: #fb8c00; }
@@ -642,7 +706,8 @@ export default {
 
 /* Sub cards */
 .sub-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 40px; }
-.sub-card { background: #111; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 18px 20px; position: relative; border-left: 4px solid transparent; transition: box-shadow 0.3s; }
+.sub-card { background: rgba(17,17,17,0.9); border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; padding: 18px 20px; position: relative; border-left: 4px solid transparent; transition: box-shadow 0.3s, border-color 0.2s; }
+.sub-card:hover { border-color: rgba(255,215,0,0.18); }
 .daily-card  { border-left-color: #4fc3f7; }
 .weekly-card { border-left-color: #FFD700; }
 .highlight-card { box-shadow: 0 0 0 3px rgba(255,215,0,0.45), 0 8px 24px rgba(0,0,0,0.5); }
@@ -729,8 +794,7 @@ export default {
 .reject-confirm-btn:disabled { opacity: 0.5; }
 .reject-cancel-btn { padding: 9px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #aaa; border-radius: 8px; font-size: 13px; cursor: pointer; }
 
-.icon-del { position: absolute; top: 14px; right: 16px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; }
-.icon-del:hover { opacity: 1; }
+.icon-del-old-placeholder { display: none; /* superseded by card-footer-row .icon-del */ }
 
 /* Payment reference */
 .payment-ref-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -769,8 +833,8 @@ export default {
 .lightbox-img { display: block; max-width: 90vw; max-height: 88vh; border-radius: 10px; object-fit: contain; }
 
 /* VIP Config */
-.vip-config-section { border-top: 1px solid rgba(255,215,0,0.12); padding-top: 32px; margin-top: 12px; }
-.vc-title { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 20px; }
+.vip-config-section { border-top: 1px solid rgba(255,215,0,0.14); padding-top: 32px; margin-top: 12px; }
+.vc-title { font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 12px; }
 .cfg-form { background: #111; border: 1px solid rgba(255,215,0,0.1); border-radius: 14px; padding: 24px; }
 .cfg-section-label { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #666; margin-bottom: 12px; margin-top: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .daily-label  { color: #4fc3f7; }
@@ -811,4 +875,26 @@ export default {
 .pkg-2   { color: var(--gold, #FFD700); }
 .pkg-5   { color: #ff7043; }
 .cfg-field-full { grid-column: 1 / -1; }
+
+/* Card footer row (edit + delete side by side) */
+.card-footer-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.edit-toggle-btn { padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(100,149,237,0.35); background: rgba(100,149,237,0.07); color: #6495ed; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.edit-toggle-btn:hover { background: rgba(100,149,237,0.14); border-color: rgba(100,149,237,0.55); }
+.icon-del { position: static; background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.18); border-radius: 8px; color: #ff7070; padding: 5px 9px; font-size: 11px; font-weight: 800; cursor: pointer; opacity: 0.72; transition: opacity 0.2s, background 0.2s; margin-left: auto; }
+.icon-del:hover { opacity: 1; background: rgba(255,82,82,0.16); }
+
+/* Edit panel */
+.edit-panel { background: rgba(100,149,237,0.06); border: 1px solid rgba(100,149,237,0.22); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+.edit-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.edit-label { font-size: 10px; font-weight: 700; color: #9ab3e8; letter-spacing: 1px; text-transform: uppercase; }
+.edit-optional { font-size: 10px; color: #666; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.edit-select { background: #1a1a1a; border: 1px solid rgba(100,149,237,0.3); border-radius: 8px; color: #ddd; font-size: 13px; padding: 9px 12px; outline: none; width: 100%; cursor: pointer; }
+.edit-select:focus { border-color: rgba(100,149,237,0.6); }
+.edit-input { background: #1a1a1a; border: 1px solid rgba(100,149,237,0.25); border-radius: 8px; color: #fff; font-size: 13px; padding: 9px 12px; outline: none; width: 100%; box-sizing: border-box; }
+.edit-input:focus { border-color: rgba(100,149,237,0.55); }
+.edit-actions { display: flex; gap: 8px; margin-top: 4px; }
+.edit-save-btn { flex: 1; padding: 9px; background: linear-gradient(135deg, #3a7bd5, #6495ed); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+.edit-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.edit-cancel-btn { padding: 9px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #aaa; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.edit-cancel-btn:hover { background: rgba(255,255,255,0.09); }
 </style>

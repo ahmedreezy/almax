@@ -15,7 +15,9 @@ const VIP_DEFAULTS = {
   daily_betslip_code:    '',
   weekly_betslip_link:   '',
   weekly_betslip_code:   '',
-  ad_video_url:          ''
+  ad_video_url:          '',
+  ad_media_type:         'video',
+  ad_media_url:          ''
 }
 
 async function seed() {
@@ -36,8 +38,8 @@ async function seed() {
     // Admin user
     const hash = await bcrypt.hash(password, 12)
     const res = await client.query(`
-      INSERT INTO admin_users (username, password_hash)
-      VALUES ($1, $2)
+      INSERT INTO admin_users (username, password_hash, role)
+      VALUES ($1, $2, 'owner')
       ON CONFLICT (username) DO NOTHING
       RETURNING id
     `, ['admin', hash])
@@ -45,6 +47,17 @@ async function seed() {
       console.log('✓ Admin user created (username: admin)')
     } else {
       console.log('  Admin user already exists — skipped.')
+    }
+
+    if (process.env.DEV_INITIAL_PASSWORD) {
+      const devHash = await bcrypt.hash(process.env.DEV_INITIAL_PASSWORD, 12)
+      const devRes = await client.query(`
+        INSERT INTO admin_users (username, password_hash, role)
+        VALUES ($1, $2, 'developer')
+        ON CONFLICT (username) DO UPDATE SET role = 'developer'
+        RETURNING id
+      `, ['almaxdev', devHash])
+      console.log(devRes.rowCount > 0 ? '✓ Developer user verified (username: almaxdev)' : '  Developer user already exists — skipped.')
     }
 
     // VIP config defaults

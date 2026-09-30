@@ -79,6 +79,10 @@ function buildMemPool () {
       phone            VARCHAR(30),
       status           VARCHAR(20) DEFAULT 'pending',
       payment_reference VARCHAR(100),
+      transaction_id    VARCHAR(200),
+      agent_commission_amount NUMERIC(12,2),
+      agent_commission_status VARCHAR(20),
+      agent_commission_tracked_at TIMESTAMPTZ,
       created_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `)
@@ -119,6 +123,8 @@ afterAll(async () => {
 const BASE = { userId: '1', paymentMethod: 'airtel', phone: '0700000001' }
 
 async function post (body) {
+  await global.__subTestPool.query(`UPDATE payments SET status = 'failed' WHERE status = 'pending'`)
+  await global.__subTestPool.query(`UPDATE subscriptions SET status = 'failed' WHERE status = 'pending'`)
   return request.post('/api/subscriptions').send(body)
 }
 

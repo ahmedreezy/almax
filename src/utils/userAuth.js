@@ -3,7 +3,12 @@ const TOKEN_KEY = 'vip_token'
 
 export function saveUser(user, token) {
   localStorage.setItem(USER_KEY,  JSON.stringify(user))
-  localStorage.setItem(TOKEN_KEY, token)
+  if (token) localStorage.setItem(TOKEN_KEY, token)
+  if (typeof window !== 'undefined') {
+    const detail = { user, token: token || getToken() }
+    window.dispatchEvent(new CustomEvent('user-logged-in', { detail }))
+    window.dispatchEvent(new CustomEvent('user-auth-changed', { detail }))
+  }
 }
 
 export function getUser() {
@@ -22,6 +27,7 @@ export function clearUser() {
   localStorage.removeItem(TOKEN_KEY)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('user-logged-out'))
+    window.dispatchEvent(new CustomEvent('user-auth-changed', { detail: { user: null, token: null } }))
   }
 }
 

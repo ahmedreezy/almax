@@ -14,6 +14,7 @@ const testimonialsRouter     = require('./routes/testimonials')
 const paymentsRouter         = require('./routes/payments')
 const notificationsRouter    = require('./routes/notifications')
 const groupsRouter           = require('./routes/groups')
+const analyticsRouter        = require('./routes/analytics')
 const webhookRouter          = require('./routes/webhook')
 
 const app = express()
@@ -62,6 +63,7 @@ app.use('/api/testimonials',       testimonialsRouter)
 app.use('/api/payments',           paymentsRouter)
 app.use('/api/notifications',      notificationsRouter)
 app.use('/api/groups',             groupsRouter)
+app.use('/api/analytics',          analyticsRouter)
 
 // Serve Vue frontend (production build)
 const DIST = path.join(__dirname, '..', 'dist')
@@ -77,10 +79,15 @@ async function start() {
   const { migrate } = require('./migrate')
   const { seed }    = require('./seed')
 
+  try {
+    await migrate()
+  } catch (err) {
+    console.error('⚠ DB migration warning:', err.message)
+  }
+
   if (!process.env.DATABASE_URL) {
     const { restoreSnapshot, registerShutdownHook } = require('./persistence')
     try {
-      await migrate()
       await restoreSnapshot(dbPool)
       const { rows } = await dbPool.query('SELECT COUNT(*) FROM admin_users')
       if (parseInt(rows[0].count, 10) === 0) await seed()

@@ -4,54 +4,19 @@
       <div class="section-header">
         <div class="header-left">
           <h2>RECENT <span class="gold-text">WINNINGS</span></h2>
-          <span class="verified-badge">✓ Admin Verified</span>
+          <span class="verified-badge">Admin Verified</span>
         </div>
-        <p class="section-sub">Latest winning slips from our VIP members</p>
+        <p class="section-sub">Latest winning proof from our VIP members</p>
       </div>
 
       <div class="winnings-grid">
         <div v-for="win in winnings" :key="win.id" class="win-card">
-          <!-- Card top -->
-          <div class="win-header">
-            <span class="win-type">{{ win.betType }}</span>
-            <span class="win-date">{{ win.date }}</span>
-          </div>
-
-          <!-- Slip image: show uploaded if available, otherwise placeholder -->
-          <div class="slip-placeholder">
-            <img
-              v-if="win.imageUrl"
-              :src="win.imageUrl"
-              :alt="win.betType + ' winning slip'"
-              class="slip-image"
-              loading="lazy"
-            />
-            <div v-else class="slip-inner">
-              <span class="slip-emoji">🎫</span>
-              <span class="slip-label">Winning Slip</span>
-              <span class="slip-note">Image coming soon</span>
+          <div class="win-media">
+            <img v-if="imageSrc(win)" :src="imageSrc(win)" :alt="captionFor(win) || 'Winning proof'" class="win-image" loading="lazy" style="cursor:zoom-in" @click="$lightbox.open(imageSrc(win))" />
+            <div v-else class="win-image-empty">Winning Proof</div>
+            <div class="win-caption-bar">
+              <p class="win-caption">{{ captionFor(win) }}</p>
             </div>
-          </div>
-
-          <!-- Win amounts -->
-          <div class="win-amounts">
-            <div class="amount-block stake">
-              <span class="amount-label">Staked</span>
-              <span class="amount-value">{{ win.staked }}</span>
-            </div>
-            <div class="win-arrow">
-              <span class="arrow-icon">▶</span>
-            </div>
-            <div class="amount-block returns">
-              <span class="amount-label">Won</span>
-              <span class="amount-value gold">{{ win.returned }}</span>
-            </div>
-          </div>
-
-          <!-- Odds row -->
-          <div class="win-footer">
-            <span class="footer-label">Total Odds</span>
-            <span class="footer-odds">{{ win.odds }}</span>
           </div>
         </div>
       </div>
@@ -61,14 +26,14 @@
 
 <script>
 import axios from 'axios'
+import { getApiBaseUrl } from '../utils/apiBase'
+
+const API = getApiBaseUrl()
 
 const STATIC_WINS = [
-  { id: 1, betType: 'Accumulator', date: 'Apr 14, 2026', staked: '$10', returned: '$210', odds: '21.00', imageUrl: '' },
-  { id: 2, betType: 'Over 2.5',    date: 'Apr 13, 2026', staked: '$20', returned: '$38',  odds: '1.90',  imageUrl: '' },
-  { id: 3, betType: 'Double',      date: 'Apr 12, 2026', staked: '$15', returned: '$72',  odds: '4.80',  imageUrl: '' },
-  { id: 4, betType: 'Both Score',  date: 'Apr 11, 2026', staked: '$25', returned: '$47',  odds: '1.88',  imageUrl: '' },
-  { id: 5, betType: 'Treble',      date: 'Apr 10, 2026', staked: '$10', returned: '$155', odds: '15.50', imageUrl: '' },
-  { id: 6, betType: 'Accumulator', date: 'Apr 9, 2026',  staked: '$5',  returned: '$85',  odds: '17.00', imageUrl: '' }
+  { id: 1, caption: 'VIP winning slip verified by the admin team.', imageUrl: '' },
+  { id: 2, caption: 'Another member cashed out from the latest Almax picks.', imageUrl: '' },
+  { id: 3, caption: 'Fresh proof from today\'s football predictions.', imageUrl: '' }
 ]
 
 export default {
@@ -94,8 +59,19 @@ export default {
         const { data } = await axios.get('/api/recent-wins')
         this.winnings = (data && data.length > 0) ? data : [...STATIC_WINS]
       } catch {
-        // Server unavailable — static wins remain
+        this.winnings = [...STATIC_WINS]
       }
+    },
+    imageSrc(win) {
+      const url = win.imageUrl || win.image_url || ''
+      if (!url) return ''
+      if (/^(https?:|data:|blob:)/.test(url)) return url
+      return API + url
+    },
+    captionFor(win) {
+      if (win.caption) return win.caption
+      const parts = [win.betType || win.bet_type, win.returned, win.odds ? `Odds ${win.odds}` : ''].filter(Boolean)
+      return parts.join(' - ') || 'Verified winning proof from Almax Predictions.'
     }
   }
 }
@@ -103,159 +79,108 @@ export default {
 
 <style scoped>
 .winnings {
-  padding: 80px 20px;
+  padding: 70px 0;
   background: var(--dark);
+  scroll-margin-top: 72px;
 }
 .container {
-  max-width: 1200px;
+  max-width: 1180px;
   margin: 0 auto;
+  padding: 0 24px;
 }
-
-.section-header { margin-bottom: 36px; }
+.section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 30px;
+}
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
-.section-header h2 {
-  font-size: 28px;
+h2 {
+  color: var(--white);
+  font-size: clamp(24px, 5vw, 36px);
   font-weight: 900;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  margin: 0;
 }
 .gold-text { color: var(--gold); }
 .verified-badge {
-  background: rgba(0, 200, 83, 0.12);
-  color: var(--green);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 999px;
+  color: var(--gold);
   font-size: 11px;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(0, 200, 83, 0.25);
+  font-weight: 900;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  text-transform: uppercase;
 }
-.section-sub {
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-/* Grid */
+.section-sub { color: var(--text-muted); font-size: 14px; margin: 0; }
 .winnings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 20px;
 }
-
-/* Card */
 .win-card {
   background: var(--dark-card);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 0, 0.1);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: transform 0.2s, border-color 0.2s;
+  overflow: hidden;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
 }
 .win-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 215, 0, 0.35);
+  transform: translateY(-5px);
+  border-color: rgba(255, 215, 0, 0.36);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.4);
 }
-
-.win-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.win-type {
-  background: rgba(255, 215, 0, 0.1);
-  color: var(--gold);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 215, 0, 0.2);
-}
-.win-date {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Slip placeholder */
-.slip-placeholder {
-  background: var(--dark-3);
-  border: 2px dashed rgba(255, 215, 0, 0.18);
-  border-radius: 10px;
-  height: 130px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.win-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
 }
-.slip-image {
+.win-image {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
-  border-radius: 8px;
+  transition: transform 0.4s;
 }
-.slip-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.slip-emoji { font-size: 30px; opacity: 0.45; }
-.slip-label {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-.slip-note {
-  font-size: 11px;
-  color: rgba(170, 170, 170, 0.5);
-}
-
-/* Amounts */
-.win-amounts {
+.win-card:hover .win-image { transform: scale(1.05); }
+.win-image-empty {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(255, 255, 255, 0.03));
+  color: rgba(255, 255, 255, 0.4);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-.amount-block {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.amount-label {
-  font-size: 11px;
-  color: var(--text-muted);
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
 }
-.amount-value {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--white);
+.win-caption-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 44px 14px 14px;
+  background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%);
 }
-.amount-value.gold {
-  color: var(--gold);
-  font-size: 22px;
+.win-caption {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
-.win-arrow { color: var(--green); }
-.arrow-icon { font-size: 16px; }
-
-/* Footer */
-.win-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-.footer-label { font-size: 12px; color: var(--text-muted); }
-.footer-odds {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--gold);
+@media (max-width: 700px) {
+  .section-header { align-items: flex-start; flex-direction: column; }
+  .winnings { padding: 52px 0; }
 }
 </style>

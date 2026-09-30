@@ -2,6 +2,7 @@ const express  = require('express')
 const router   = express.Router()
 const { pool } = require('../db')
 const auth     = require('../middleware/authMiddleware')
+const { trackCommissionForSubscription } = require('../utils/commission')
 
 function rowToPayment(row) {
   return {
@@ -91,6 +92,7 @@ async function applyPaymentOutcome(sub, status, transactionId, source) {
        WHERE subscription_id = $2 AND status = 'pending'`,
       [transactionId || '', sub.id]
     )
+    await trackCommissionForSubscription(pool, sub.id)
     console.info(`[Webhook] Subscription ${sub.id} activated via ${source}. ref=${sub.payment_reference} txn=${transactionId || ''}`)
     return
   }
@@ -278,6 +280,7 @@ router.post('/webhook', express.raw({ type: ['application/json', 'text/xml', 'ap
          WHERE subscription_id = $2 AND status = 'pending'`,
         [transactionId, sub.id]
       )
+      await trackCommissionForSubscription(pool, sub.id)
       console.info(`[Webhook] Subscription ${sub.id} activated. ref=${reference} txn=${transactionId}`)
     } else if (isFailure) {
       await pool.query(`UPDATE subscriptions SET status = 'failed' WHERE id = $1`, [sub.id])

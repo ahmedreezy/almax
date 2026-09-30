@@ -3,6 +3,10 @@
     <!-- ── Theme Nav Bar ── -->
     <nav v-if="!isAdminRoute" class="theme-nav" aria-label="Appearance settings">
       <div class="theme-nav-inner">
+        <a class="theme-brand" href="/" aria-label="Almax Football Predictions home">
+          <img class="theme-brand-logo" src="@/assets/almax-mark.png" alt="" />
+          <span class="theme-brand-text">ALMAX</span>
+        </a>
         <span class="theme-nav-label">Appearance</span>
         <div class="theme-nav-pills" role="group" aria-label="Choose theme">
           <button
@@ -21,15 +25,22 @@
     </nav>
 
     <router-view />
+
+    <PhotoLightbox />
+
+    <footer v-if="!isAdminRoute" class="powered-footnote">
+      Powered by Dape Technologies
+    </footer>
   </div>
 </template>
 
 <script>
 import './assets/styles/global.css'
 import UserProfile from './components/UserProfile.vue'
+import PhotoLightbox from './components/PhotoLightbox.vue'
 export default {
   name: 'App',
-  components: { UserProfile },
+  components: { UserProfile, PhotoLightbox },
   data() {
     const saved = localStorage.getItem('theme') || 'dark'
     return {
@@ -45,7 +56,10 @@ export default {
   },
   computed: {
     isAdminRoute() {
-      return this.$route && this.$route.path.startsWith('/admin')
+      return this.$route && (
+        this.$route.path.startsWith('/admin') ||
+        this.$route.path.startsWith('/dev')
+      )
     },
     isLight() {
       if (this.themeMode === 'system') return this.systemIsLight
@@ -94,6 +108,22 @@ export default {
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 #app-root { min-height: 100vh; }
+.powered-footnote {
+  background: #050505;
+  border-top: 1px solid rgba(255, 215, 0, 0.12);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.5;
+  padding: 8px 14px;
+  text-align: center;
+}
+body.light-mode .powered-footnote {
+  background: #f3f4f6;
+  border-top-color: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.56);
+}
 
 /* ── Theme Nav ── */
 .theme-nav {
@@ -108,7 +138,7 @@ export default {
   box-shadow: 0 3px 20px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 body.light-mode .theme-nav {
@@ -119,10 +149,38 @@ body.light-mode .theme-nav {
 .theme-nav-inner {
   display: flex;
   align-items: center;
+  width: 100%;
+  max-width: 1200px;
   gap: 10px;
   padding: 0 18px;
 }
-.nav-user-profile { margin-left: auto; }
+.theme-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: #fff;
+  text-decoration: none;
+  min-width: 0;
+}
+.theme-brand-logo {
+  width: 30px;
+  height: 30px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.28));
+}
+.theme-brand-text {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+  line-height: 1;
+}
+body.light-mode .theme-brand-text {
+  color: #141414;
+}
+.nav-user-profile { margin-left: 4px; }
 .theme-nav-label {
   font-size: 11px;
   font-weight: 600;
@@ -179,6 +237,9 @@ body.light-mode .theme-pill.active {
 .pill-label { line-height: 1; }
 
 @media (max-width: 480px) {
+  .theme-nav-inner { padding: 0 10px; gap: 8px; }
+  .theme-brand-logo { width: 28px; height: 28px; }
+  .theme-brand-text { display: none; }
   .theme-nav-label { display: none; }
   .pill-label { display: none; }
   .theme-pill { padding: 4px 9px; }

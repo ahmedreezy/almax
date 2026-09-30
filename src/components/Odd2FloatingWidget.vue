@@ -11,7 +11,7 @@
     <div class="odd2-icon-wrap" aria-hidden="true">⚡</div>
     <div class="odd2-text">
       <span class="odd2-label">FREE DAILY TIP</span>
-      <span class="odd2-value">{{ liveOdd }}</span>
+      <span class="odd2-value">VIEW</span>
     </div>
     <span class="odd2-arrow" aria-hidden="true">›</span>
     <div class="odd2-pulse" aria-hidden="true"></div>
@@ -19,31 +19,10 @@
 </template>
 
 <script>
-import axios from 'axios'
-
 export default {
   name: 'Odd2FloatingWidget',
   emits: ['open'],
-  data() {
-    return { liveOdd: '2.00' }
-  },
-  mounted() {
-    this.fetchOdd()
-    this._pollInterval = setInterval(this.fetchOdd, 30000)
-  },
-  beforeUnmount() {
-    clearInterval(this._pollInterval)
-  },
-  methods: {
-    async fetchOdd() {
-      try {
-        const { data } = await axios.get('/api/config/free-odd2')
-        if (data && data.odd) this.liveOdd = String(data.odd)
-      } catch {
-        // Server not reachable — keep current value
-      }
-    }
-  }
+  methods: {}
 }
 </script>
 

@@ -74,6 +74,11 @@
                   <button type="button" class="pw-eye" @click="showConfirmPw = !showConfirmPw" :aria-label="showConfirmPw ? 'Hide password' : 'Show password'">{{ showConfirmPw ? '🙈' : '👁' }}</button>
                 </div>
               </div>
+              <div class="up-field">
+                <label>Security Answer</label>
+                <span class="security-question">{{ magicQuestion || 'Account recovery answer' }}</span>
+                <input v-model="regForm.securityAnswer" type="text" placeholder="Your answer" required minlength="2" autocomplete="off" />
+              </div>
               <p v-if="authError" class="up-error" role="alert">{{ authError }}</p>
               <button type="submit" class="up-submit-btn" :disabled="authLoading">
                 {{ authLoading ? 'Creating account…' : 'Create Account →' }}
@@ -118,8 +123,9 @@ export default {
       showDropdown: false,
       showAuthModal: false,
       authTab: 'register',
-      regForm: { username: '', phone: '', password: '', confirmPassword: '' },
+      regForm: { username: '', phone: '', password: '', confirmPassword: '', securityAnswer: '' },
       loginForm: { phone: '', password: '' },
+      magicQuestion: '',
       authError: '',
       authLoading: false,
       activeSub: null,
@@ -145,10 +151,16 @@ export default {
   mounted() {
     this.user = getUser()
     if (this.user) this.fetchStatus()
+    window.addEventListener('user-auth-changed', this.handleAuthChanged)
+    window.addEventListener('open-user-auth', this.openAuth)
+    window.addEventListener('user-subscription-updated', this.handleSubscriptionUpdated)
     document.addEventListener('click', this.handleOutsideClick)
     document.addEventListener('keydown', this.handleKeyDown)
   },
   beforeUnmount() {
+    window.removeEventListener('user-auth-changed', this.handleAuthChanged)
+    window.removeEventListener('open-user-auth', this.openAuth)
+    window.removeEventListener('user-subscription-updated', this.handleSubscriptionUpdated)
     document.removeEventListener('click', this.handleOutsideClick)
     document.removeEventListener('keydown', this.handleKeyDown)
     document.body.style.overflow = ''
@@ -190,6 +202,17 @@ export default {
     handleKeyDown(e) {
       if (e.key === 'Escape' && this.showAuthModal) this.closeAuth()
     },
+    handleAuthChanged(event) {
+      const user = event.detail?.user || getUser()
+      this.user = user
+      this.activeSub = null
+      this.showDropdown = false
+      if (user) this.fetchStatus()
+    },
+    handleSubscriptionUpdated() {
+      this.user = getUser()
+      if (this.user) this.fetchStatus()
+    },
     toggleDropdown() {
       this.showDropdown = !this.showDropdown
       if (this.showDropdown && !this.activeSub) this.fetchStatus()
@@ -198,17 +221,27 @@ export default {
       this.authError = ''
       this.showAuthModal = true
       document.body.style.overflow = 'hidden'
+      this.loadMagicQuestion()
     },
     closeAuth() {
       this.showAuthModal = false
       this.authError = ''
       document.body.style.overflow = ''
       // Reset forms
-      this.regForm = { username: '', phone: '', password: '', confirmPassword: '' }
+      this.regForm = { username: '', phone: '', password: '', confirmPassword: '', securityAnswer: '' }
       this.loginForm = { phone: '', password: '' }
       this.showRegPw = false
       this.showConfirmPw = false
       this.showLoginPw = false
+    },
+    async loadMagicQuestion() {
+      if (this.magicQuestion) return
+      try {
+        const { data } = await axios.get('/api/users/magic-question')
+        this.magicQuestion = data.question || ''
+      } catch {
+        this.magicQuestion = ''
+      }
     },
     async doRegister() {
       if (this.regForm.password !== this.regForm.confirmPassword) {
@@ -221,7 +254,8 @@ export default {
         const { data } = await axios.post('/api/users', {
           username: this.regForm.username,
           phone: this.regForm.phone,
-          password: this.regForm.password
+          password: this.regForm.password,
+          securityAnswer: this.regForm.securityAnswer
         })
         const { token, ...userInfo } = data
         saveUser(userInfo, token)
@@ -352,6 +386,7 @@ export default {
 .up-form { display: flex; flex-direction: column; gap: 14px; }
 .up-field { display: flex; flex-direction: column; gap: 6px; }
 .up-field label { font-size: 12px; font-weight: 700; color: var(--text-muted, #aaa); text-transform: uppercase; letter-spacing: 0.5px; }
+.security-question { font-size: 12px; color: rgba(255,255,255,0.62); line-height: 1.35; }
 .up-field input {
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px; padding: 12px 14px; color: var(--white, #fff);

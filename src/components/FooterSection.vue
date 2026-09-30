@@ -3,6 +3,13 @@
     <!-- Social links -->
     <div class="social-section">
       <div class="container">
+        <div class="footer-brand">
+          <img class="footer-brand-logo" src="@/assets/almax-mark.png" alt="Almax Football Prediction logo" />
+          <div class="footer-brand-copy">
+            <strong>ALMAX</strong>
+            <span>Football Predictions</span>
+          </div>
+        </div>
         <div class="social-divider"></div>
         <p class="social-label">Follow &amp; connect with us</p>
         <div class="social-links">
@@ -83,6 +90,40 @@ export default {
 
 /* Social links */
 .social-section { padding: 0 0 40px; }
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 0 28px;
+}
+.footer-brand-logo {
+  width: 52px;
+  height: 52px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.32));
+}
+.footer-brand-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+}
+.footer-brand-copy strong {
+  color: var(--cream);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+.footer-brand-copy span {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
 .social-divider {
   height: 1px;
   background: rgba(255, 215, 0, 0.08);

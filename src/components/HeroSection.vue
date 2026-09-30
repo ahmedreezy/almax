@@ -9,7 +9,6 @@
         :style="icon.style"
       >{{ icon.char }}</span>
     </div>
-
     <!-- Main content -->
     <div class="hero-content">
       <div class="hero-badge">🏆 ALMAX FOOTBALL PREDICTIONS</div>
@@ -111,15 +110,20 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   position: relative;
   overflow: hidden;
-  padding: 100px 20px 48px;
+  padding: clamp(82px, 9vh, 112px) 20px 48px;
   text-align: center;
 }
 
 /* Background floating icons */
-.bg-icons { position: absolute; inset: 0; pointer-events: none; }
+.bg-icons {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
 .bg-icon {
   position: absolute;
   opacity: 0.55;
