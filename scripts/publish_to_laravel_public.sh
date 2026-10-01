@@ -3,7 +3,7 @@ set -euo pipefail
 
 TARGET_PUBLIC_DIR="${1:-}"
 if [[ -z "$TARGET_PUBLIC_DIR" ]]; then
-  echo "Usage: $0 /home/farmsnva/almaxapi/public"
+  echo "Usage: $0 /home/farmsnva/almaxpredictions.com/almaxapi/public"
   exit 1
 fi
 
@@ -50,5 +50,5 @@ cp -R "$DIST_DIR"/* "$TARGET_PUBLIC_DIR"/
 echo "[5/5] Publish complete."
 echo ""
 echo "Next: run backend deploy script so Laravel caches are warm:"
-echo "  bash /home/farmsnva/almaxapi/scripts/deploy_cpanel.sh"
+echo "  bash /home/farmsnva/almaxpredictions.com/almaxapi/scripts/deploy_cpanel.sh"
 echo "=========================================="
