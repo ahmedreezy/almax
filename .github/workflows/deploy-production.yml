@@ -38,6 +38,14 @@ jobs:
       - name: Build production frontend
         run: npm run build
 
+      - name: Upload production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
   deploy:
     name: Deploy frontend to cPanel
     needs: validate
@@ -57,6 +65,12 @@ jobs:
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
 
     steps:
+      - name: Download production build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+
       - name: Validate deployment configuration
         shell: bash
         run: |
@@ -79,22 +93,36 @@ jobs:
         shell: bash
         run: |
           port="${DEPLOY_PORT:-22}"
+          archive="frontend-${GITHUB_SHA}.tar.gz"
+          remote_archive="$API_DEPLOY_PATH/$archive"
+          tar -C dist -czf "$archive" .
+          scp -i ~/.ssh/id_ed25519 -P "$port" "$archive" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$remote_archive"
           ssh -i ~/.ssh/id_ed25519 -p "$port" "$DEPLOY_USER@$DEPLOY_HOST" \
-            bash -s -- "$FRONTEND_DEPLOY_PATH" "$API_DEPLOY_PATH" <<'REMOTE'
+            bash -s -- "$API_DEPLOY_PATH/public" "$remote_archive" <<'REMOTE'
           set -euo pipefail
-          frontend_path="$1"
-          api_path="$2"
+          target_public="$1"
+          archive="$2"
+          staging="$(mktemp -d "$target_public/.frontend_release.XXXXXX")"
+          backup="$target_public/.frontend_backup_$(date +%Y%m%d_%H%M%S)"
+          cleanup() {
+            rm -rf "$staging"
+            rm -f "$archive"
+          }
+          trap cleanup EXIT
 
-          test -d "$frontend_path/.git"
-          test -d "$api_path/public"
+          test -d "$target_public"
+          mkdir -p "$backup"
+          tar -xzf "$archive" -C "$staging"
+          test -f "$staging/index.html"
 
-          cd "$frontend_path"
-          git diff --quiet
-          git diff --cached --quiet
-          git fetch --prune origin main
-          git checkout main
-          git merge --ff-only origin/main
-          bash scripts/publish_to_laravel_public.sh "$api_path/public"
+          for entry in index.html favicon.ico js css img fonts assets; do
+            if [[ -e "$target_public/$entry" ]]; then
+              cp -a "$target_public/$entry" "$backup/"
+            fi
+            rm -rf "$target_public/$entry"
+          done
+          cp -a "$staging/." "$target_public/"
           REMOTE
 
       - name: Verify production site
