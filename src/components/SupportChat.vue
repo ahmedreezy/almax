@@ -107,7 +107,7 @@
 
 <script>
 import axios from 'axios'
-import { getToken, getUser } from '../utils/userAuth.js'
+import { clearUser, getToken, getUser } from '../utils/userAuth.js'
 
 export default {
   name: 'SupportChat',
@@ -184,6 +184,13 @@ export default {
       this.closeChat()
       this.conversation = null
     },
+    handleUnauthorized() {
+      clearUser()
+      this.conversation = null
+      this.closeChat()
+      this.openAfterAuth = true
+      window.dispatchEvent(new CustomEvent('open-user-auth'))
+    },
     handleKeydown(event) {
       if (event.key === 'Escape' && this.isOpen) this.closeChat()
     },
@@ -204,7 +211,7 @@ export default {
         this.scrollToBottom()
       } catch (error) {
         if (error?.response?.status === 401) {
-          this.handleLogout()
+          this.handleUnauthorized()
         } else if (showLoading) {
           this.error = 'We could not load support right now. Please try again.'
         }
@@ -227,6 +234,10 @@ export default {
         this.startPolling()
         this.scrollToBottom()
       } catch (error) {
+        if (error?.response?.status === 401) {
+          this.handleUnauthorized()
+          return
+        }
         if (error?.response?.status === 409 && error.response.data?.conversation) {
           this.conversation = error.response.data.conversation
           this.startPolling()
