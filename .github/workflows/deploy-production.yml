@@ -2,6 +2,7 @@ name: Deploy Production
 
 on:
   push:
+    branches: [main]
     branches:
       - main
   workflow_dispatch:
@@ -15,6 +16,9 @@ concurrency:
 
 jobs:
   validate:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     name: Test and build frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -38,16 +42,8 @@ jobs:
       - name: Build production frontend
         run: npm run build
 
-      - name: Upload production build
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist
-          if-no-files-found: error
-          retention-days: 1
-
   deploy:
-    name: Deploy frontend to cPanel
+    name: Deploy to cPanel
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -63,26 +59,17 @@ jobs:
       FRONTEND_DEPLOY_PATH: ${{ vars.FRONTEND_DEPLOY_PATH }}
       API_DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
-
     steps:
-      - name: Download production build
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist
-
       - name: Validate deployment configuration
-        shell: bash
         run: |
-          : "${DEPLOY_HOST:?Missing DEPLOY_HOST production secret}"
-          : "${DEPLOY_USER:?Missing DEPLOY_USER production secret}"
-          : "${DEPLOY_SSH_KEY:?Missing DEPLOY_SSH_KEY production secret}"
-          : "${DEPLOY_KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS production secret}"
-          : "${FRONTEND_DEPLOY_PATH:?Missing FRONTEND_DEPLOY_PATH production variable}"
-          : "${API_DEPLOY_PATH:?Missing API_DEPLOY_PATH production variable}"
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST environment secret}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER environment secret}"
+          : "${DEPLOY_SSH_KEY:?Missing DEPLOY_SSH_KEY environment secret}"
+          : "${DEPLOY_KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS environment secret}"
+          : "${FRONTEND_DEPLOY_PATH:?Missing FRONTEND_DEPLOY_PATH environment variable}"
+          : "${API_DEPLOY_PATH:?Missing API_DEPLOY_PATH environment variable}"
 
       - name: Configure SSH
-        shell: bash
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
@@ -90,39 +77,24 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
       - name: Deploy frontend
-        shell: bash
         run: |
           port="${DEPLOY_PORT:-22}"
-          archive="frontend-${GITHUB_SHA}.tar.gz"
-          remote_archive="$API_DEPLOY_PATH/$archive"
-          tar -C dist -czf "$archive" .
-          scp -i ~/.ssh/id_ed25519 -P "$port" "$archive" \
-            "$DEPLOY_USER@$DEPLOY_HOST:$remote_archive"
           ssh -i ~/.ssh/id_ed25519 -p "$port" "$DEPLOY_USER@$DEPLOY_HOST" \
-            bash -s -- "$API_DEPLOY_PATH/public" "$remote_archive" <<'REMOTE'
+            bash -s -- "$FRONTEND_DEPLOY_PATH" "$API_DEPLOY_PATH" <<'REMOTE'
           set -euo pipefail
-          target_public="$1"
-          archive="$2"
-          staging="$(mktemp -d "$target_public/.frontend_release.XXXXXX")"
-          backup="$target_public/.frontend_backup_$(date +%Y%m%d_%H%M%S)"
-          cleanup() {
-            rm -rf "$staging"
-            rm -f "$archive"
-          }
-          trap cleanup EXIT
+          frontend_path="$1"
+          api_path="$2"
 
-          test -d "$target_public"
-          mkdir -p "$backup"
-          tar -xzf "$archive" -C "$staging"
-          test -f "$staging/index.html"
+          test -d "$frontend_path/.git"
+          test -d "$api_path/public"
 
-          for entry in index.html favicon.ico js css img fonts assets; do
-            if [[ -e "$target_public/$entry" ]]; then
-              cp -a "$target_public/$entry" "$backup/"
-            fi
-            rm -rf "$target_public/$entry"
-          done
-          cp -a "$staging/." "$target_public/"
+          cd "$frontend_path"
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch --prune origin main
+          git checkout main
+          git merge --ff-only origin/main
+          bash scripts/publish_to_laravel_public.sh "$api_path/public"
           REMOTE
 
       - name: Verify production site
