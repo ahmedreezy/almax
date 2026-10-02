@@ -72,7 +72,7 @@
 
               <div v-if="waitingForReply" class="support-typing" aria-label="Almax Support is replying">
                 <span></span><span></span><span></span>
-                <em>Almax Support is replying</em>
+                <em>{{ replyStatus }}</em>
               </div>
             </div>
 
@@ -123,6 +123,8 @@ export default {
       error: '',
       pollTimer: null,
       pollAttempts: 0,
+      pollStartedAt: 0,
+      waitingSeconds: 0,
       hasUnread: false,
       openAfterAuth: false,
       suggestions: [
@@ -138,6 +140,11 @@ export default {
     },
     waitingForReply() {
       return Boolean(this.conversation?.waitingForReply)
+    },
+    replyStatus() {
+      if (this.waitingSeconds >= 30) return 'This is taking longer than usual. We are still trying.'
+      if (this.waitingSeconds >= 8) return 'Preparing your reply…'
+      return 'Checking your request…'
     }
   },
   mounted() {
@@ -166,6 +173,8 @@ export default {
     closeChat() {
       this.isOpen = false
       this.stopPolling()
+      this.pollStartedAt = 0
+      this.waitingSeconds = 0
       document.body.style.overflow = ''
     },
     goHome() {
@@ -254,22 +263,37 @@ export default {
       this.$nextTick(() => this.$refs.input?.focus())
     },
     startPolling(reset = false) {
-      if (reset) this.pollAttempts = 0
-      if (this.pollTimer || this.pollAttempts >= 75) return
+      if (reset) {
+        this.pollAttempts = 0
+        this.pollStartedAt = Date.now()
+        this.waitingSeconds = 0
+      }
+      if (!this.pollStartedAt) this.pollStartedAt = Date.now()
+      if (this.pollTimer) return
+
+      const elapsed = Date.now() - this.pollStartedAt
+      if (elapsed >= 75000) {
+        this.error = 'This reply is taking longer than expected. Please try again in a moment.'
+        return
+      }
+
+      const delays = [1000, 1500, 2500, 4000, 5000]
+      const delay = delays[Math.min(this.pollAttempts, delays.length - 1)]
       this.pollTimer = window.setTimeout(async () => {
         this.pollTimer = null
         this.pollAttempts += 1
-        if (this.pollAttempts >= 75) {
-          this.error = 'This reply is taking longer than expected. Send another message to start a new session.'
-          return
-        }
+        this.waitingSeconds = Math.floor((Date.now() - this.pollStartedAt) / 1000)
         await this.fetchConversation(false)
         if (this.waitingForReply && !this.pollTimer) this.startPolling()
-      }, 4000)
+      }, delay)
     },
     stopPolling() {
       if (this.pollTimer) window.clearTimeout(this.pollTimer)
       this.pollTimer = null
+      if (!this.waitingForReply) {
+        this.pollStartedAt = 0
+        this.waitingSeconds = 0
+      }
     },
     scrollToBottom() {
       this.$nextTick(() => {
@@ -286,7 +310,17 @@ export default {
       })
     },
     formatTime(value) {
-      return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return ''
+
+      const time = new Intl.DateTimeFormat('en-UG', {
+        timeZone: 'Africa/Kampala',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(date)
+
+      return `${time} EAT`
     }
   }
 }

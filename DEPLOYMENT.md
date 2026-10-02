@@ -87,8 +87,12 @@ Optionally configure required reviewers on the `production` environment. Doing s
 The in-platform support bot dispatches jobs to the `support` queue. Keep a persistent worker running through Supervisor or the cPanel process manager:
 
 ```bash
-php artisan queue:work database --queue=support,default --tries=2 --timeout=240
+php artisan queue:work database --queue=support --sleep=1 --tries=1 --timeout=60 --max-time=3600
 ```
+
+Run this as a persistent Supervisor, systemd, or cPanel Process Manager process.
+A once-per-minute cron worker is only a fallback and can add nearly one minute
+of queue delay to every chat response.
 
 The API deployment script runs `php artisan queue:restart`, which tells an existing worker to restart cleanly after deployment.
 
