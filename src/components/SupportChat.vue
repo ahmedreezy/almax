@@ -20,7 +20,7 @@
 
     <Teleport to="body">
       <transition name="support-fade">
-        <div v-if="isOpen" class="support-layer" @click.self="closeChat">
+        <div v-if="isOpen" class="support-layer">
           <section
             class="support-panel"
             role="dialog"
@@ -28,12 +28,18 @@
             aria-labelledby="support-chat-title"
           >
             <header class="support-header">
+              <button class="support-back" type="button" aria-label="Back to home" @click="goHome">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15.4 5.4 8.8 12l6.6 6.6-1.8 1.8L5.2 12l8.4-8.4 1.8 1.8Z"/>
+                </svg>
+                <span>Back</span>
+              </button>
               <div class="support-agent-mark" aria-hidden="true">A</div>
-              <div>
+              <div class="support-heading">
+                <span class="support-eyebrow">Almax assistant</span>
                 <h2 id="support-chat-title">Almax Support</h2>
                 <p><span class="support-online"></span> Here to guide you</p>
               </div>
-              <button class="support-close" type="button" aria-label="Close support chat" @click="closeChat">×</button>
             </header>
 
             <div ref="messages" class="support-messages" aria-live="polite">
@@ -143,12 +149,10 @@ export default {
   mounted() {
     window.addEventListener('user-auth-changed', this.handleAuthChange)
     window.addEventListener('user-logged-out', this.handleLogout)
-    document.addEventListener('keydown', this.handleKeydown)
   },
   beforeUnmount() {
     window.removeEventListener('user-auth-changed', this.handleAuthChange)
     window.removeEventListener('user-logged-out', this.handleLogout)
-    document.removeEventListener('keydown', this.handleKeydown)
     this.stopPolling()
     document.body.style.overflow = ''
   },
@@ -170,6 +174,10 @@ export default {
       this.stopPolling()
       document.body.style.overflow = ''
     },
+    goHome() {
+      this.closeChat()
+      if (this.$route.path !== '/') this.$router.push('/')
+    },
     handleAuthChange(event) {
       if (!event.detail?.user) return
       if (this.openAfterAuth) {
@@ -190,9 +198,6 @@ export default {
       this.closeChat()
       this.openAfterAuth = true
       window.dispatchEvent(new CustomEvent('open-user-auth'))
-    },
-    handleKeydown(event) {
-      if (event.key === 'Escape' && this.isOpen) this.closeChat()
     },
     authHeaders() {
       return { Authorization: 'Bearer ' + getToken() }
@@ -309,45 +314,61 @@ export default {
 .support-launcher small { color: #aaa; font-size: 10px; margin-top: 2px; }
 .support-unread { position: absolute; top: 3px; right: 5px; width: 10px; height: 10px; border-radius: 50%; background: #ffd700; border: 2px solid #16140d; }
 
-.support-layer { position: fixed; inset: 0; z-index: 10000; background: rgba(0, 0, 0, .38); }
+.support-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 4vw, 48px);
+  background: rgba(4, 5, 4, .52);
+  backdrop-filter: blur(12px) saturate(115%);
+  -webkit-backdrop-filter: blur(12px) saturate(115%);
+}
 .support-panel {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  width: min(390px, calc(100vw - 32px));
-  height: min(650px, calc(100dvh - 40px));
+  position: relative;
+  width: min(720px, 100%);
+  height: min(760px, calc(100dvh - clamp(24px, 8vw, 96px)));
+  min-height: min(560px, calc(100dvh - 24px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   overflow: hidden;
-  border: 1px solid rgba(255, 215, 0, .22);
-  border-radius: 18px;
-  background: var(--dark-2, #111);
+  border: 1px solid rgba(255, 236, 153, .22);
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgba(31, 31, 25, .82), rgba(11, 12, 10, .7));
   color: var(--white, #fff);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .62);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, .58), inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 0 0 1px rgba(255, 215, 0, .04);
+  backdrop-filter: blur(28px) saturate(130%);
+  -webkit-backdrop-filter: blur(28px) saturate(130%);
 }
-.support-header { display: flex; align-items: center; gap: 11px; padding: 15px 16px; border-bottom: 1px solid var(--border); background: var(--dark-card, #1e1e1e); }
+.support-header { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 13px; padding: 18px 20px; border-bottom: 1px solid rgba(255, 255, 255, .09); background: rgba(255, 255, 255, .035); }
+.support-back { min-height: 38px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px 0 7px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 11px; background: rgba(255, 255, 255, .055); color: var(--white, #fff); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.support-back svg { width: 17px; height: 17px; fill: currentColor; }
+.support-back:hover { border-color: rgba(255, 215, 0, .4); background: rgba(255, 215, 0, .08); }
+.support-back:active { transform: translateX(-2px); }
+.support-back:focus-visible { outline: 3px solid rgba(255, 215, 0, .3); outline-offset: 2px; }
 .support-agent-mark, .welcome-mark { display: grid; place-items: center; border-radius: 50%; background: #ffd700; color: #121212; font-weight: 900; }
-.support-agent-mark { width: 38px; height: 38px; font-size: 16px; }
+.support-agent-mark { width: 42px; height: 42px; font-size: 16px; box-shadow: 0 0 0 5px rgba(255, 215, 0, .08); }
+.support-heading { min-width: 0; }
+.support-eyebrow { display: block; margin-bottom: 2px; color: #d5b829; font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
 .support-header h2 { font-size: 15px; line-height: 1.3; }
 .support-header p { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--text-muted); font-size: 11px; }
 .support-online { width: 7px; height: 7px; border-radius: 50%; background: #25b967; box-shadow: 0 0 0 3px rgba(37, 185, 103, .12); }
-.support-close { margin-left: auto; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); font-size: 26px; line-height: 1; cursor: pointer; }
-.support-close:hover { background: rgba(255, 255, 255, .07); color: var(--white); }
 
-.support-messages { min-height: 0; overflow-y: auto; padding: 18px 14px; background: var(--section-bg, #0a0a0a); scroll-behavior: smooth; }
+.support-messages { min-height: 0; overflow-y: auto; padding: 24px clamp(16px, 4vw, 30px); background: rgba(3, 4, 3, .32); scroll-behavior: smooth; }
 .support-loading { height: 100%; display: flex; align-items: center; justify-content: center; gap: 5px; }
 .support-loading span, .support-typing span { width: 6px; height: 6px; border-radius: 50%; background: #b89511; animation: supportBounce 1.2s infinite; }
 .support-loading span:nth-child(2), .support-typing span:nth-child(2) { animation-delay: .14s; }
 .support-loading span:nth-child(3), .support-typing span:nth-child(3) { animation-delay: .28s; }
 @keyframes supportBounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-5px); opacity: 1; } }
 
-.support-message { width: fit-content; max-width: 84%; margin-bottom: 13px; }
-.support-message p { padding: 10px 12px; border-radius: 13px; font-size: 13px; line-height: 1.48; white-space: pre-wrap; overflow-wrap: anywhere; }
+.support-message { width: fit-content; max-width: min(82%, 520px); margin-bottom: 15px; }
+.support-message p { padding: 11px 14px; border-radius: 15px; font-size: 13px; line-height: 1.52; white-space: pre-wrap; overflow-wrap: anywhere; }
 .support-message time { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; }
 .from-user { margin-left: auto; }
 .from-user p { border-bottom-right-radius: 4px; background: #caa900; color: #111; }
 .from-user time { text-align: right; }
-.from-support p { border: 1px solid var(--border); border-bottom-left-radius: 4px; background: var(--dark-card); color: var(--white); }
+.from-support p { border: 1px solid rgba(255, 255, 255, .1); border-bottom-left-radius: 4px; background: rgba(255, 255, 255, .075); color: var(--white); }
 .message-author { display: block; margin: 0 0 4px 3px; color: #c3a314; font-size: 10px; font-weight: 700; }
 
 .support-welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 18px 8px; }
@@ -360,18 +381,18 @@ export default {
 
 .support-typing { width: fit-content; display: flex; align-items: center; gap: 4px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--dark-card); }
 .support-typing em { margin-left: 5px; color: var(--text-muted); font-size: 10px; font-style: normal; }
-.support-error, .support-human-note { padding: 8px 14px 0; background: var(--dark-2); font-size: 11px; }
+.support-error, .support-human-note { padding: 8px clamp(16px, 4vw, 30px) 0; background: rgba(10, 11, 9, .48); font-size: 11px; }
 .support-error { color: #ff7e7e; }
 .support-human-note { color: #c3a314; }
-.support-composer { display: flex; align-items: flex-end; gap: 8px; padding: 11px 12px 7px; background: var(--dark-2); }
-.support-composer textarea { min-height: 42px; max-height: 105px; resize: vertical; flex: 1; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; outline: none; background: var(--input-bg); color: var(--input-color); font: inherit; font-size: 13px; line-height: 1.4; }
+.support-composer { display: flex; align-items: flex-end; gap: 9px; padding: 13px clamp(14px, 3vw, 24px) 8px; background: rgba(10, 11, 9, .62); }
+.support-composer textarea { min-height: 46px; max-height: 120px; resize: vertical; flex: 1; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; outline: none; background: rgba(255, 255, 255, .07); color: var(--input-color); font: inherit; font-size: 13px; line-height: 1.4; }
 .support-composer textarea:focus { border-color: rgba(255, 215, 0, .58); box-shadow: 0 0 0 3px rgba(255, 215, 0, .08); }
 .support-composer textarea:disabled { opacity: .62; }
 .support-composer button { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: 12px; background: #ffd700; color: #111; cursor: pointer; }
 .support-composer button:disabled { opacity: .35; cursor: not-allowed; }
 .support-composer button:not(:disabled):active { transform: scale(.96); }
 .support-composer svg { width: 19px; height: 19px; fill: currentColor; }
-.support-privacy { padding: 0 14px 10px; background: var(--dark-2); color: var(--text-muted); font-size: 9px; text-align: center; }
+.support-privacy { padding: 0 14px 12px; background: rgba(10, 11, 9, .62); color: var(--text-muted); font-size: 9px; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 .support-fade-enter-active, .support-fade-leave-active { transition: opacity .18s ease; }
@@ -381,13 +402,35 @@ export default {
 
 body.light-mode .support-launcher { background: #fff; color: #181818; box-shadow: 0 12px 30px rgba(59, 45, 0, .18); }
 body.light-mode .support-launcher small { color: #5d5d5d; }
-body.light-mode .support-layer { background: rgba(22, 18, 4, .22); }
-body.light-mode .support-close:hover { background: rgba(0, 0, 0, .06); }
+body.light-mode .support-layer { background: rgba(58, 48, 13, .16); }
+body.light-mode .support-panel { background: linear-gradient(145deg, rgba(255, 255, 252, .88), rgba(247, 244, 230, .76)); color: #181711; box-shadow: 0 30px 100px rgba(77, 62, 8, .2), inset 0 1px 0 rgba(255, 255, 255, .86); }
+body.light-mode .support-header, body.light-mode .support-composer, body.light-mode .support-privacy, body.light-mode .support-error, body.light-mode .support-human-note { background: rgba(255, 255, 255, .38); }
+body.light-mode .support-messages { background: rgba(255, 252, 237, .3); }
+body.light-mode .support-back { color: #242117; border-color: rgba(45, 39, 15, .16); background: rgba(255, 255, 255, .42); }
+body.light-mode .from-support p, body.light-mode .support-suggestions button, body.light-mode .support-typing { background: rgba(255, 255, 255, .58); color: #1d1b14; border-color: rgba(45, 39, 15, .14); }
+body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7); border-color: rgba(45, 39, 15, .16); }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .support-launcher { right: 14px; bottom: 16px; min-height: 52px; padding: 9px 12px; }
   .support-launcher span:not(.support-unread) { display: none; }
   .support-launcher svg { width: 28px; height: 28px; }
-  .support-panel { inset: auto 0 0; width: 100%; height: min(720px, calc(100dvh - 52px)); border-radius: 18px 18px 0 0; border-bottom: 0; }
+  .support-layer { padding: 8px; }
+  .support-panel { width: 100%; height: calc(100dvh - 16px); min-height: 0; border-radius: 20px; }
+  .support-header { gap: 10px; padding: 13px 12px; }
+  .support-back { min-height: 36px; padding-right: 8px; }
+  .support-agent-mark { width: 38px; height: 38px; }
+  .support-messages { padding: 18px 14px; }
+  .support-message { max-width: 88%; }
+}
+
+@media (max-width: 390px) {
+  .support-back span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .support-back { width: 38px; justify-content: center; padding: 0; }
+  .support-eyebrow { font-size: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-fade-enter-active, .support-fade-leave-active,
+  .support-fade-enter-active .support-panel, .support-fade-leave-active .support-panel { transition: none; }
 }
 </style>
