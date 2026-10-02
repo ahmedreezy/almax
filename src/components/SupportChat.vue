@@ -77,10 +77,6 @@
             </div>
 
             <p v-if="error" class="support-error" role="alert">{{ error }}</p>
-            <p v-if="isHumanQueue" class="support-human-note">
-              Your conversation is with our support team. A person will reply here.
-            </p>
-
             <form class="support-composer" @submit.prevent="sendMessage">
               <label for="support-message-input" class="sr-only">Message Almax Support</label>
               <textarea
@@ -141,9 +137,6 @@ export default {
     },
     waitingForReply() {
       return Boolean(this.conversation?.waitingForReply)
-    },
-    isHumanQueue() {
-      return ['waiting_human', 'human'].includes(this.conversation?.mode)
     }
   },
   mounted() {
@@ -211,7 +204,7 @@ export default {
         this.conversation = data.conversation
         this.error = ''
         if (!this.isOpen && this.messages.length > previousCount) this.hasUnread = true
-        if (this.waitingForReply || this.isHumanQueue) this.startPolling()
+        if (this.waitingForReply) this.startPolling()
         else this.stopPolling()
         this.scrollToBottom()
       } catch (error) {
@@ -381,9 +374,8 @@ export default {
 
 .support-typing { width: fit-content; display: flex; align-items: center; gap: 4px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 12px; background: var(--dark-card); }
 .support-typing em { margin-left: 5px; color: var(--text-muted); font-size: 10px; font-style: normal; }
-.support-error, .support-human-note { padding: 8px clamp(16px, 4vw, 30px) 0; background: rgba(10, 11, 9, .48); font-size: 11px; }
+.support-error { padding: 8px clamp(16px, 4vw, 30px) 0; background: rgba(10, 11, 9, .48); font-size: 11px; }
 .support-error { color: #ff7e7e; }
-.support-human-note { color: #c3a314; }
 .support-composer { display: flex; align-items: flex-end; gap: 9px; padding: 13px clamp(14px, 3vw, 24px) 8px; background: rgba(10, 11, 9, .62); }
 .support-composer textarea { min-height: 46px; max-height: 120px; resize: vertical; flex: 1; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; outline: none; background: rgba(255, 255, 255, .07); color: var(--input-color); font: inherit; font-size: 13px; line-height: 1.4; }
 .support-composer textarea:focus { border-color: rgba(255, 215, 0, .58); box-shadow: 0 0 0 3px rgba(255, 215, 0, .08); }
@@ -404,7 +396,7 @@ body.light-mode .support-launcher { background: #fff; color: #181818; box-shadow
 body.light-mode .support-launcher small { color: #5d5d5d; }
 body.light-mode .support-layer { background: rgba(58, 48, 13, .16); }
 body.light-mode .support-panel { background: linear-gradient(145deg, rgba(255, 255, 252, .88), rgba(247, 244, 230, .76)); color: #181711; box-shadow: 0 30px 100px rgba(77, 62, 8, .2), inset 0 1px 0 rgba(255, 255, 255, .86); }
-body.light-mode .support-header, body.light-mode .support-composer, body.light-mode .support-privacy, body.light-mode .support-error, body.light-mode .support-human-note { background: rgba(255, 255, 255, .38); }
+body.light-mode .support-header, body.light-mode .support-composer, body.light-mode .support-privacy, body.light-mode .support-error { background: rgba(255, 255, 255, .38); }
 body.light-mode .support-messages { background: rgba(255, 252, 237, .3); }
 body.light-mode .support-back { color: #242117; border-color: rgba(45, 39, 15, .16); background: rgba(255, 255, 255, .42); }
 body.light-mode .from-support p, body.light-mode .support-suggestions button, body.light-mode .support-typing { background: rgba(255, 255, 255, .58); color: #1d1b14; border-color: rgba(45, 39, 15, .14); }
