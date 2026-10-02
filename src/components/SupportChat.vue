@@ -86,12 +86,12 @@
                 rows="1"
                 maxlength="2000"
                 placeholder="Type your message…"
-                :disabled="sending || waitingForReply"
+                :disabled="sending"
                 @keydown.enter.exact.prevent="sendMessage"
               ></textarea>
               <button
                 type="submit"
-                :disabled="!draft.trim() || sending || waitingForReply"
+                :disabled="!draft.trim() || sending"
                 aria-label="Send message"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -122,6 +122,7 @@ export default {
       draft: '',
       error: '',
       pollTimer: null,
+      pollAttempts: 0,
       hasUnread: false,
       openAfterAuth: false,
       suggestions: [
@@ -205,7 +206,10 @@ export default {
         this.error = ''
         if (!this.isOpen && this.messages.length > previousCount) this.hasUnread = true
         if (this.waitingForReply) this.startPolling()
-        else this.stopPolling()
+        else {
+          this.stopPolling()
+          this.pollAttempts = 0
+        }
         this.scrollToBottom()
       } catch (error) {
         if (error?.response?.status === 401) {
@@ -219,7 +223,7 @@ export default {
     },
     async sendMessage() {
       const body = this.draft.trim()
-      if (!body || this.sending || this.waitingForReply) return
+      if (!body || this.sending) return
       this.sending = true
       this.error = ''
       try {
@@ -229,7 +233,7 @@ export default {
         }, { headers: this.authHeaders() })
         this.conversation = data.conversation
         this.draft = ''
-        this.startPolling()
+        this.startPolling(true)
         this.scrollToBottom()
       } catch (error) {
         if (error?.response?.status === 401) {
@@ -238,7 +242,7 @@ export default {
         }
         if (error?.response?.status === 409 && error.response.data?.conversation) {
           this.conversation = error.response.data.conversation
-          this.startPolling()
+          this.startPolling(true)
         }
         this.error = error?.response?.data?.message || 'Your message could not be sent. Please try again.'
       } finally {
@@ -249,12 +253,22 @@ export default {
       this.draft = suggestion
       this.$nextTick(() => this.$refs.input?.focus())
     },
-    startPolling() {
-      if (this.pollTimer) return
-      this.pollTimer = window.setInterval(() => this.fetchConversation(false), 2000)
+    startPolling(reset = false) {
+      if (reset) this.pollAttempts = 0
+      if (this.pollTimer || this.pollAttempts >= 90) return
+      this.pollTimer = window.setTimeout(async () => {
+        this.pollTimer = null
+        this.pollAttempts += 1
+        if (this.pollAttempts >= 90) {
+          this.error = 'This reply is taking longer than expected. Send another message to start a new session.'
+          return
+        }
+        await this.fetchConversation(false)
+        if (this.waitingForReply && !this.pollTimer) this.startPolling()
+      }, 2000)
     },
     stopPolling() {
-      if (this.pollTimer) window.clearInterval(this.pollTimer)
+      if (this.pollTimer) window.clearTimeout(this.pollTimer)
       this.pollTimer = null
     },
     scrollToBottom() {
