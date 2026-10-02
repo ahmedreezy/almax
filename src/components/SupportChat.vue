@@ -255,17 +255,17 @@ export default {
     },
     startPolling(reset = false) {
       if (reset) this.pollAttempts = 0
-      if (this.pollTimer || this.pollAttempts >= 90) return
+      if (this.pollTimer || this.pollAttempts >= 75) return
       this.pollTimer = window.setTimeout(async () => {
         this.pollTimer = null
         this.pollAttempts += 1
-        if (this.pollAttempts >= 90) {
+        if (this.pollAttempts >= 75) {
           this.error = 'This reply is taking longer than expected. Send another message to start a new session.'
           return
         }
         await this.fetchConversation(false)
         if (this.waitingForReply && !this.pollTimer) this.startPolling()
-      }, 2000)
+      }, 4000)
     },
     stopPolling() {
       if (this.pollTimer) window.clearTimeout(this.pollTimer)

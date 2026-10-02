@@ -87,7 +87,7 @@ Optionally configure required reviewers on the `production` environment. Doing s
 The in-platform support bot dispatches jobs to the `support` queue. Keep a persistent worker running through Supervisor or the cPanel process manager:
 
 ```bash
-php artisan queue:work --queue=support,default --tries=3 --timeout=120
+php artisan queue:work database --queue=support,default --tries=2 --timeout=240
 ```
 
 The API deployment script runs `php artisan queue:restart`, which tells an existing worker to restart cleanly after deployment.
