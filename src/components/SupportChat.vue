@@ -119,6 +119,7 @@ export default {
       loading: false,
       sending: false,
       conversation: null,
+      pendingMessage: null,
       draft: '',
       error: '',
       pollTimer: null,
@@ -136,10 +137,11 @@ export default {
   },
   computed: {
     messages() {
-      return this.conversation?.messages || []
+      const messages = this.conversation?.messages || []
+      return this.pendingMessage ? [...messages, this.pendingMessage] : messages
     },
     waitingForReply() {
-      return Boolean(this.conversation?.waitingForReply)
+      return Boolean(this.pendingMessage || this.conversation?.waitingForReply)
     },
     replyStatus() {
       if (this.waitingSeconds >= 30) return 'This is taking longer than usual. We are still trying.'
@@ -233,18 +235,31 @@ export default {
     async sendMessage() {
       const body = this.draft.trim()
       if (!body || this.sending) return
+      const clientMessageId = this.newMessageId()
       this.sending = true
       this.error = ''
+      this.draft = ''
+      this.pendingMessage = {
+        id: `pending-${clientMessageId}`,
+        sender: 'user',
+        senderType: 'customer',
+        body,
+        sentAt: new Date().toISOString()
+      }
+      this.scrollToBottom()
       try {
         const { data } = await axios.post('/api/support/chat/messages', {
           body,
-          clientMessageId: this.newMessageId()
+          clientMessageId
         }, { headers: this.authHeaders() })
+        this.pendingMessage = null
         this.conversation = data.conversation
-        this.draft = ''
-        this.startPolling(true)
+        if (this.waitingForReply) this.startPolling(true)
+        else this.stopPolling()
         this.scrollToBottom()
       } catch (error) {
+        this.pendingMessage = null
+        this.draft = body
         if (error?.response?.status === 401) {
           this.handleUnauthorized()
           return
@@ -255,6 +270,7 @@ export default {
         }
         this.error = error?.response?.data?.message || 'Your message could not be sent. Please try again.'
       } finally {
+        this.pendingMessage = null
         this.sending = false
       }
     },
