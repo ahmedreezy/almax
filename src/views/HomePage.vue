@@ -18,6 +18,7 @@
       @openVip="openVipFromModal"
     />
     <Odd2FloatingWidget @open="openWidget" />
+    <WhatsAppButton />
     <SupportChat />
   </div>
 </template>
@@ -28,6 +29,7 @@ import HeroSection from '../components/HeroSection.vue'
 import FeaturedSection from '../components/FeaturedSection.vue'
 import RecentWinnings from '../components/RecentWinnings.vue'
 import FooterSection from '../components/FooterSection.vue'
+import WhatsAppButton from '../components/WhatsAppButton.vue'
 import SupportChat from '../components/SupportChat.vue'
 import Odd2FloatingWidget from '../components/Odd2FloatingWidget.vue'
 import VideoAdModal from '../components/VideoAdModal.vue'
@@ -40,6 +42,7 @@ export default {
     FeaturedSection,
     RecentWinnings,
     FooterSection,
+    WhatsAppButton,
     SupportChat,
     Odd2FloatingWidget,
     VideoAdModal,
