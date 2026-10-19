@@ -519,7 +519,31 @@
             <p v-if="statusError" class="reg-error">{{ statusError }}</p>
             <div v-if="statusLoading" class="pkg-loading">Loading your subscriptions…</div>
 
-            <div v-else-if="activeSubs.length" class="betslip-box">
+            <div v-if="!statusLoading && recoveryTickets.length" class="recovery-list">
+              <div v-for="ticket in recoveryTickets" :key="ticket.id" class="recovery-ticket">
+                <div class="recovery-ticket-head">
+                  <div>
+                    <span class="recovery-free">Free recovery</span>
+                    <strong>{{ ticket.release?.group?.name || 'VIP package' }}</strong>
+                  </div>
+                  <span>🎟</span>
+                </div>
+                <p>A paid package did not pass, so this replacement ticket was added to your account.</p>
+                <div v-if="ticket.release?.betslip_link" class="betslip-section">
+                  <div class="betslip-label">🔗 Recovery Betslip</div>
+                  <a :href="ticket.release.betslip_link" target="_blank" rel="noopener" class="betslip-link">Open recovery ticket</a>
+                </div>
+                <div v-if="ticket.release?.betslip_code" class="betslip-section">
+                  <div class="betslip-label">🎫 Recovery Code</div>
+                  <div class="betslip-code-row">
+                    <code class="betslip-code">{{ ticket.release.betslip_code }}</code>
+                    <button class="copy-btn" @click="copyCode(ticket.release.betslip_code)">{{ copied ? '✓' : 'Copy' }}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!statusLoading && activeSubs.length" class="betslip-box">
               <div v-for="sub in activeSubs" :key="sub.id" class="status-sub-card">
                 <div v-if="sub.packagePhoto" class="sub-card-photo-wrap">
                   <img :src="resolvePhotoUrl(sub.packagePhoto)" alt="VIP Package" class="sub-card-photo" style="cursor:zoom-in" @click="$lightbox.open(resolvePhotoUrl(sub.packagePhoto))" />
@@ -557,7 +581,7 @@
                 </a>
               </div>
             </div>
-            <div v-else-if="statusChecked && !activeSubs.length" class="pending-box">
+            <div v-if="!statusLoading && statusChecked && !activeSubs.length && !recoveryTickets.length" class="pending-box">
               <p style="text-align:center; color: var(--text-muted); font-size:14px;">
                 {{ pendingStatusMsg || 'No active subscription found.' }}
               </p>
@@ -675,6 +699,7 @@ export default {
       statusChecked: false,
       activeSub: null,
       activeSubs: [],
+      recoveryTickets: [],
       pendingStatusMsg: '',
       copied: false,
       // Decorations
@@ -847,7 +872,7 @@ export default {
       try {
         const user = getUser()
         if (!user || !user.id) return
-        const { data: subs } = await axios.get('/api/subscriptions/user/' + user.id)
+        const { data: subs } = await axios.get('/api/subscriptions/me')
         this.userActiveSubs = subs.filter(s => s.status === 'active').map(this.normalizeSub)
       } catch { /* ignore */ }
     },
@@ -906,6 +931,7 @@ export default {
       this.userActiveSubs = []
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       if (['payment-prompt', 'processing', 'deadline-closed'].includes(this.vipStep)) {
         this.stopPolling()
         this.vipStep = 3
@@ -969,6 +995,7 @@ export default {
       this.statusChecked = false
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       this.pendingStatusMsg = ''
 
       const stored = isLoggedIn() ? getUser() : null
@@ -1196,6 +1223,7 @@ export default {
       this.statusChecked = false
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       this.pendingStatusMsg = ''
       try {
         const loggedInUser = isLoggedIn() ? (this.regUser || getUser()) : null
@@ -1204,7 +1232,11 @@ export default {
           this.statusChecked = true
           return
         }
-        const { data: subs } = await axios.get('/api/subscriptions/user/' + loggedInUser.id)
+        const [{ data: subs }, { data: recoveries }] = await Promise.all([
+          axios.get('/api/subscriptions/me'),
+          axios.get('/api/package-releases/recoveries/me')
+        ])
+        this.recoveryTickets = Array.isArray(recoveries) ? recoveries : []
         const allActive = subs.filter(s => s.status === 'active').map(this.normalizeSub)
         if (allActive.length) {
           this.activeSub  = allActive[0]
@@ -2120,4 +2152,12 @@ export default {
   border-color: var(--gold, #FFD700);
   color: var(--dark, #0a0a0a);
 }
+.recovery-list { display:grid; gap:12px; margin:16px 0; text-align:left; }
+.recovery-ticket { padding:16px; border:1px solid rgba(255,215,0,.28); border-radius:13px; background:linear-gradient(145deg,rgba(255,215,0,.10),rgba(255,255,255,.025)); }
+.recovery-ticket-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.recovery-ticket-head > div { display:flex; flex-direction:column; gap:4px; }
+.recovery-ticket-head > span { font-size:24px; }
+.recovery-ticket strong { color:#fff; font-size:15px; }
+.recovery-ticket p { color:rgba(255,255,255,.58); font-size:12px; line-height:1.5; }
+.recovery-free { color:#ffd700; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
 </style>

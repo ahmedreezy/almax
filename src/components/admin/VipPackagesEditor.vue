@@ -239,6 +239,8 @@
           </button>
         </form>
       </div>
+
+      <PackageReleaseManager :packages="[...packages, ...(specialPackage ? [specialPackage] : [])]" @published="fetchPackages" />
     </template>
   </div>
 </template>
@@ -246,11 +248,13 @@
 <script>
 import adminApi from '@/utils/adminApi'
 import { getApiBaseUrl } from '@/utils/apiBase'
+import PackageReleaseManager from './PackageReleaseManager.vue'
 
 const API = getApiBaseUrl()
 
 export default {
   name: 'VipPackagesEditor',
+  components: { PackageReleaseManager },
   data() {
     return {
       packages:   [],
