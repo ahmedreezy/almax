@@ -36,7 +36,7 @@
               </button>
               <div class="support-agent-mark" aria-hidden="true">A</div>
               <div class="support-heading">
-                <span class="support-eyebrow">Almax assistant</span>
+                <span class="support-eyebrow">{{ conversation?.mode === 'human' ? 'Human support' : 'Almax assistant' }}</span>
                 <h2 id="support-chat-title">Almax Support</h2>
                 <p><span class="support-online"></span> Here to guide you</p>
               </div>
@@ -54,6 +54,19 @@
                   :class="['support-message', message.sender === 'user' ? 'from-user' : 'from-support']"
                 >
                   <span v-if="message.sender === 'support'" class="message-author">Almax Support</span>
+                  <div v-if="message.attachments?.length" class="message-attachments">
+                    <template v-for="attachment in message.attachments" :key="attachment.id">
+                      <img
+                        v-if="attachment.kind === 'image' && attachment.blobUrl"
+                        :src="attachment.blobUrl"
+                        alt="Chat attachment"
+                        class="chat-image"
+                        @click="$lightbox.open(attachment.blobUrl)"
+                      />
+                      <audio v-else-if="attachment.kind === 'audio' && attachment.blobUrl" :src="attachment.blobUrl" controls preload="metadata"></audio>
+                      <span v-else class="attachment-processing">Processing {{ attachment.kind }}…</span>
+                    </template>
+                  </div>
                   <p>{{ message.body }}</p>
                   <time v-if="message.sentAt" :datetime="message.sentAt">{{ formatTime(message.sentAt) }}</time>
                 </article>
@@ -77,7 +90,14 @@
             </div>
 
             <p v-if="error" class="support-error" role="alert">{{ error }}</p>
+            <div v-if="selectedFiles.length || recording" class="attachment-preview" role="status" aria-live="polite">
+              <span v-if="recording" class="recording-dot">Recording {{ recordingSeconds }}s / 120s</span>
+              <span v-for="file in selectedFiles" :key="file.name + file.size">{{ file.type.startsWith('image/') ? 'Image' : 'Voice note' }} · {{ file.name }}</span>
+              <button type="button" @click="clearAttachments">Remove</button>
+            </div>
             <form class="support-composer" @submit.prevent="sendMessage">
+              <input ref="imageInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple @change="selectImages" />
+              <button type="button" class="composer-tool" aria-label="Attach screenshots" :disabled="sending || recording" @click="$refs.imageInput.click()">＋</button>
               <label for="support-message-input" class="sr-only">Message Almax Support</label>
               <textarea
                 id="support-message-input"
@@ -85,18 +105,30 @@
                 v-model="draft"
                 rows="1"
                 maxlength="2000"
-                placeholder="Type your message…"
-                :disabled="sending"
+                :placeholder="recording ? 'Recording voice note…' : 'Type your message…'"
+                :disabled="sending || recording"
                 @keydown.enter.exact.prevent="sendMessage"
               ></textarea>
               <button
-                type="submit"
-                :disabled="!draft.trim() || sending"
-                aria-label="Send message"
+                type="button"
+                :class="['composer-primary', `is-${primaryActionMode}`]"
+                :disabled="sending"
+                :aria-label="primaryActionLabel"
+                :title="primaryActionLabel"
+                @click="handlePrimaryAction"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m3.4 20.4 18-7.5a1 1 0 0 0 0-1.84l-18-7.5a1 1 0 0 0-1.35 1.16L3.8 11H12v2H3.8l-1.75 6.24a1 1 0 0 0 1.35 1.16Z"/>
-                </svg>
+                <transition name="composer-action" mode="out-in">
+                  <svg v-if="primaryActionMode === 'send'" key="send" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m3.4 20.4 18-7.5a1 1 0 0 0 0-1.84l-18-7.5a1 1 0 0 0-1.35 1.16L3.8 11H12v2H3.8l-1.75 6.24a1 1 0 0 0 1.35 1.16Z"/>
+                  </svg>
+                  <svg v-else-if="primaryActionMode === 'stop'" key="stop" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="2" />
+                  </svg>
+                  <svg v-else key="record" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 15.25a4.25 4.25 0 0 0 4.25-4.25V6a4.25 4.25 0 0 0-8.5 0v5A4.25 4.25 0 0 0 12 15.25Zm-2.25-9.25a2.25 2.25 0 0 1 4.5 0v5a2.25 2.25 0 0 1-4.5 0V6Z"/>
+                    <path d="M5.75 10.5a1 1 0 1 0-2 0 8.25 8.25 0 0 0 7.25 8.18V21H8.5a1 1 0 1 0 0 2h7a1 1 0 1 0 0-2H13v-2.32a8.25 8.25 0 0 0 7.25-8.18 1 1 0 1 0-2 0 6.25 6.25 0 0 1-12.5 0Z"/>
+                  </svg>
+                </transition>
               </button>
             </form>
             <p class="support-privacy">Do not share passwords, PINs, or OTP codes.</p>
@@ -127,6 +159,13 @@ export default {
       pollStartedAt: 0,
       waitingSeconds: 0,
       hasUnread: false,
+      selectedFiles: [],
+      attachmentUrls: {},
+      mediaRecorder: null,
+      recording: false,
+      recordingSeconds: 0,
+      recordingTimer: null,
+      audioChunks: [],
       openAfterAuth: false,
       suggestions: [
         'Where can I see my subscription?',
@@ -144,9 +183,24 @@ export default {
       return Boolean(this.pendingMessage || this.conversation?.waitingForReply)
     },
     replyStatus() {
+      if (this.conversation?.mode === 'human') return 'A support specialist is reviewing your message…'
       if (this.waitingSeconds >= 30) return 'This is taking longer than usual. We are still trying.'
       if (this.waitingSeconds >= 8) return 'Preparing your reply…'
       return 'Checking your request…'
+    },
+    hasSendableContent() {
+      return Boolean(this.draft.trim() || this.selectedFiles.length)
+    },
+    primaryActionMode() {
+      if (this.recording) return 'stop'
+      return this.hasSendableContent ? 'send' : 'record'
+    },
+    primaryActionLabel() {
+      return {
+        record: 'Record voice note',
+        stop: 'Stop recording',
+        send: 'Send message'
+      }[this.primaryActionMode]
     }
   },
   mounted() {
@@ -157,6 +211,8 @@ export default {
     window.removeEventListener('user-auth-changed', this.handleAuthChange)
     window.removeEventListener('user-logged-out', this.handleLogout)
     this.stopPolling()
+    this.stopRecording(true)
+    Object.values(this.attachmentUrls).forEach(url => URL.revokeObjectURL(url))
     document.body.style.overflow = ''
   },
   methods: {
@@ -207,6 +263,17 @@ export default {
     authHeaders() {
       return { Authorization: 'Bearer ' + getToken() }
     },
+    handlePrimaryAction() {
+      if (this.recording) {
+        this.stopRecording(false)
+        return
+      }
+      if (this.hasSendableContent) {
+        this.sendMessage()
+        return
+      }
+      this.toggleRecording()
+    },
     async fetchConversation(showLoading = false) {
       if (!getToken()) return
       if (showLoading) this.loading = true
@@ -214,6 +281,7 @@ export default {
         const previousCount = this.messages.length
         const { data } = await axios.get('/api/support/chat', { headers: this.authHeaders() })
         this.conversation = data.conversation
+        await this.hydrateAttachments()
         this.error = ''
         if (!this.isOpen && this.messages.length > previousCount) this.hasUnread = true
         if (this.waitingForReply) this.startPolling()
@@ -234,7 +302,7 @@ export default {
     },
     async sendMessage() {
       const body = this.draft.trim()
-      if (!body || this.sending) return
+      if ((!body && !this.selectedFiles.length) || this.sending || this.recording) return
       const clientMessageId = this.newMessageId()
       this.sending = true
       this.error = ''
@@ -243,17 +311,22 @@ export default {
         id: `pending-${clientMessageId}`,
         sender: 'user',
         senderType: 'customer',
-        body,
+        body: body || (this.selectedFiles[0]?.type.startsWith('image/') ? 'Please review this screenshot.' : 'Voice note'),
+        attachments: this.selectedFiles.map((file, index) => ({ id: `pending-file-${index}`, kind: file.type.startsWith('image/') ? 'image' : 'audio' })),
         sentAt: new Date().toISOString()
       }
       this.scrollToBottom()
       try {
-        const { data } = await axios.post('/api/support/chat/messages', {
-          body,
-          clientMessageId
-        }, { headers: this.authHeaders() })
+        const form = new FormData()
+        form.append('body', body)
+        form.append('clientMessageId', clientMessageId)
+        this.selectedFiles.forEach(file => form.append('attachments[]', file, file.name))
+        if (this.selectedFiles.some(file => !file.type.startsWith('image/'))) form.append('audioDuration', String(Math.max(1, this.recordingSeconds || 1)))
+        const { data } = await axios.post('/api/support/chat/messages', form, { headers: this.authHeaders() })
         this.pendingMessage = null
+        this.clearAttachments()
         this.conversation = data.conversation
+        await this.hydrateAttachments()
         if (this.waitingForReply) this.startPolling(true)
         else this.stopPolling()
         this.scrollToBottom()
@@ -277,6 +350,88 @@ export default {
     useSuggestion(suggestion) {
       this.draft = suggestion
       this.$nextTick(() => this.$refs.input?.focus())
+    },
+    selectImages(event) {
+      const files = Array.from(event.target.files || []).slice(0, 3)
+      if (files.some(file => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+        this.error = 'Please choose PNG, JPEG, or WEBP images.'
+        return
+      }
+      if (files.some(file => file.size > 8 * 1024 * 1024)) {
+        this.error = 'Each image must be 8 MB or smaller.'
+        return
+      }
+      this.selectedFiles = files
+      this.error = ''
+      event.target.value = ''
+    },
+    async toggleRecording() {
+      if (this.recording) {
+        this.stopRecording(false)
+        return
+      }
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        this.error = 'Voice recording is not supported by this browser.'
+        return
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        this.audioChunks = []
+        this.recordingSeconds = 0
+        const preferred = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type))
+        this.mediaRecorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined)
+        this.mediaRecorder.ondataavailable = event => { if (event.data.size) this.audioChunks.push(event.data) }
+        this.mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(track => track.stop())
+          if (!this.audioChunks.length) return
+          const type = this.mediaRecorder.mimeType || 'audio/webm'
+          const extension = type.includes('ogg') ? 'ogg' : (type.includes('mp4') ? 'm4a' : 'webm')
+          const blob = new Blob(this.audioChunks, { type })
+          this.selectedFiles = [new File([blob], `voice-note-${Date.now()}.${extension}`, { type })]
+        }
+        this.mediaRecorder.start(250)
+        this.recording = true
+        this.recordingTimer = window.setInterval(() => {
+          this.recordingSeconds += 1
+          if (this.recordingSeconds >= 120) this.stopRecording(false)
+        }, 1000)
+      } catch {
+        this.error = 'Microphone permission was not granted.'
+      }
+    },
+    stopRecording(discard = false) {
+      if (this.recordingTimer) window.clearInterval(this.recordingTimer)
+      this.recordingTimer = null
+      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+        if (discard) {
+          this.mediaRecorder.ondataavailable = null
+          this.mediaRecorder.onstop = null
+        }
+        this.mediaRecorder.stop()
+        this.mediaRecorder.stream?.getTracks().forEach(track => track.stop())
+      }
+      this.recording = false
+      if (discard) this.audioChunks = []
+    },
+    clearAttachments() {
+      if (this.recording) this.stopRecording(true)
+      this.selectedFiles = []
+      this.recordingSeconds = 0
+    },
+    async hydrateAttachments() {
+      const attachments = (this.conversation?.messages || []).flatMap(message => message.attachments || [])
+      await Promise.all(attachments.map(async attachment => {
+        if (this.attachmentUrls[attachment.id]) {
+          attachment.blobUrl = this.attachmentUrls[attachment.id]
+          return
+        }
+        try {
+          const { data } = await axios.get(attachment.url, { headers: this.authHeaders(), responseType: 'blob' })
+          const url = URL.createObjectURL(data)
+          this.attachmentUrls[attachment.id] = url
+          attachment.blobUrl = url
+        } catch { /* keep the processing placeholder */ }
+      }))
     },
     startPolling(reset = false) {
       if (reset) {
@@ -427,6 +582,10 @@ export default {
 .from-user time { text-align: right; }
 .from-support p { border: 1px solid rgba(255, 255, 255, .1); border-bottom-left-radius: 4px; background: rgba(255, 255, 255, .075); color: var(--white); }
 .message-author { display: block; margin: 0 0 4px 3px; color: #c3a314; font-size: 10px; font-weight: 700; }
+.message-attachments { display: grid; gap: 7px; margin-bottom: 7px; }
+.chat-image { width: min(300px, 100%); max-height: 260px; object-fit: contain; border-radius: 12px; cursor: zoom-in; background: rgba(0,0,0,.28); }
+.message-attachments audio { width: min(310px, 100%); height: 38px; }
+.attachment-processing { color: var(--text-muted); font-size: 11px; }
 
 .support-welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 18px 8px; }
 .welcome-mark { width: 48px; height: 48px; margin-bottom: 14px; box-shadow: 0 0 0 6px rgba(255, 215, 0, .08); }
@@ -440,6 +599,11 @@ export default {
 .support-typing em { margin-left: 5px; color: var(--text-muted); font-size: 10px; font-style: normal; }
 .support-error { padding: 8px clamp(16px, 4vw, 30px) 0; background: rgba(10, 11, 9, .48); font-size: 11px; }
 .support-error { color: #ff7e7e; }
+.attachment-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px clamp(14px, 3vw, 24px); border-top: 1px solid rgba(255,255,255,.08); background: rgba(10,11,9,.72); color: var(--text-muted); font-size: 11px; }
+.attachment-preview button { margin-left: auto; border: 0; background: transparent; color: #ff8585; cursor: pointer; }
+.recording-dot { display: inline-flex; align-items: center; gap: 7px; color: #ff8b8b; font-weight: 750; }
+.recording-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #ff5252; box-shadow: 0 0 0 0 rgba(255,82,82,.5); animation: recordingPulse 1.35s ease-out infinite; }
+@keyframes recordingPulse { 70% { box-shadow: 0 0 0 7px rgba(255,82,82,0); } 100% { box-shadow: 0 0 0 0 rgba(255,82,82,0); } }
 .support-composer { display: flex; align-items: flex-end; gap: 9px; padding: 13px clamp(14px, 3vw, 24px) 8px; background: rgba(10, 11, 9, .62); }
 .support-composer textarea { min-height: 46px; max-height: 120px; resize: vertical; flex: 1; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; outline: none; background: rgba(255, 255, 255, .07); color: var(--input-color); font: inherit; font-size: 13px; line-height: 1.4; }
 .support-composer textarea:focus { border-color: rgba(255, 215, 0, .58); box-shadow: 0 0 0 3px rgba(255, 215, 0, .08); }
@@ -447,7 +611,15 @@ export default {
 .support-composer button { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: 12px; background: #ffd700; color: #111; cursor: pointer; }
 .support-composer button:disabled { opacity: .35; cursor: not-allowed; }
 .support-composer button:not(:disabled):active { transform: scale(.96); }
+.support-composer .composer-tool { width: 36px; height: 42px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #ffd700; font-size: 17px; }
+.support-composer .composer-primary { width: 44px; height: 44px; border-radius: 50%; transition: transform .16s ease, background .18s ease, color .18s ease, box-shadow .18s ease; }
+.support-composer .composer-primary.is-record { background: #ffd700; color: #111; box-shadow: 0 5px 16px rgba(255,215,0,.2); }
+.support-composer .composer-primary.is-send { background: #ffd700; color: #111; box-shadow: 0 5px 18px rgba(255,215,0,.28); }
+.support-composer .composer-primary.is-stop { background: #ff5252; color: #fff; box-shadow: 0 5px 18px rgba(255,82,82,.28); }
 .support-composer svg { width: 19px; height: 19px; fill: currentColor; }
+.composer-action-enter-active, .composer-action-leave-active { transition: opacity .1s ease, transform .1s ease; }
+.composer-action-enter-from { opacity: 0; transform: scale(.72) rotate(-8deg); }
+.composer-action-leave-to { opacity: 0; transform: scale(.72) rotate(8deg); }
 .support-privacy { padding: 0 14px 12px; background: rgba(10, 11, 9, .62); color: var(--text-muted); font-size: 9px; text-align: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
@@ -477,6 +649,9 @@ body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7)
   .support-agent-mark { width: 38px; height: 38px; }
   .support-messages { padding: 18px 14px; }
   .support-message { max-width: 88%; }
+  .support-composer { gap: 7px; padding-inline: 11px; }
+  .support-composer textarea { min-height: 44px; }
+  .support-composer .composer-primary { width: 44px; height: 44px; }
 }
 
 @media (max-width: 390px) {
@@ -487,6 +662,8 @@ body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7)
 
 @media (prefers-reduced-motion: reduce) {
   .support-fade-enter-active, .support-fade-leave-active,
-  .support-fade-enter-active .support-panel, .support-fade-leave-active .support-panel { transition: none; }
+  .support-fade-enter-active .support-panel, .support-fade-leave-active .support-panel,
+  .composer-action-enter-active, .composer-action-leave-active { transition: none; }
+  .recording-dot::before { animation: none; }
 }
 </style>
