@@ -2,9 +2,8 @@
   <section class="release-manager">
     <div class="release-head">
       <div>
-        <span class="release-kicker">Ticket lifecycle</span>
-        <h3>Publish &amp; settle package tickets</h3>
-        <p>Publish a ticket with its cutoff, then mark it passed or failed. A failed ticket grants one shared recovery ticket to every eligible paid subscriber.</p>
+        <span class="release-kicker">Package tickets</span>
+        <h3>Package releases</h3>
       </div>
       <button class="refresh-btn" :disabled="loading" @click="fetchReleases">Refresh</button>
     </div>
@@ -36,6 +35,39 @@
 
     <p v-if="notice" :class="['release-notice', noticeType]">{{ notice }}</p>
 
+    <section class="recovery-panel" aria-labelledby="recovery-title">
+      <div class="recovery-heading">
+        <div>
+          <span class="release-kicker">Compensation</span>
+          <h3 id="recovery-title">Recovery tickets</h3>
+        </div>
+        <span class="selection-count">{{ selectedReleaseIds.length }} selected</span>
+      </div>
+
+      <form class="recovery-form" @submit.prevent="issueRecovery">
+        <fieldset v-if="recoveryCandidates.length" class="recovery-packages">
+          <legend class="sr-only">Select failed packages</legend>
+          <label v-for="release in recoveryCandidates" :key="release.public_id" :class="['recovery-option', { selected: selectedReleaseIds.includes(release.public_id) }]">
+            <input v-model="selectedReleaseIds" type="checkbox" :value="release.public_id" />
+            <span>{{ release.group?.name || 'Package' }}</span>
+            <small>{{ formatDate(release.cutoff_at) }}</small>
+          </label>
+        </fieldset>
+        <div v-else class="recovery-empty">No packages ready for recovery.</div>
+        <label>
+          Recovery betslip link
+          <input v-model.trim="recoveryForm.betslipLink" type="url" placeholder="https://…" />
+        </label>
+        <label>
+          Recovery betslip code
+          <input v-model.trim="recoveryForm.betslipCode" type="text" placeholder="ABC123" />
+        </label>
+        <button class="recovery-submit" :disabled="issuingRecovery || selectedReleaseIds.length === 0">
+          {{ issuingRecovery ? 'Issuing…' : 'Issue recovery ticket' }}
+        </button>
+      </form>
+    </section>
+
     <div v-if="loading" class="release-empty">Loading ticket releases…</div>
     <div v-else-if="paidReleases.length === 0" class="release-empty">No tickets have been published through the release tracker yet.</div>
     <div v-else class="release-list">
@@ -57,26 +89,13 @@
           <button class="pass-btn" :disabled="!canSettle(release) || settlingId === release.public_id" @click="settle(release, 'passed')">
             Mark passed
           </button>
-          <button class="fail-btn" :disabled="!canSettle(release) || settlingId === release.public_id" @click="openRecovery(release)">
-            Mark failed
+          <button class="fail-btn" :disabled="!canSettle(release) || settlingId === release.public_id" @click="toggleRecovery(release)">
+            {{ selectedReleaseIds.includes(release.public_id) ? 'Remove recovery' : 'Add recovery' }}
           </button>
           <span v-if="!canSettle(release)" class="settle-hint">Available after cutoff.</span>
         </div>
 
-        <form v-if="recoveryFor === release.public_id" class="recovery-form" @submit.prevent="settle(release, 'failed')">
-          <strong>Add the one free recovery ticket</strong>
-          <p>This same replacement will be granted to all users who paid for this release before its cutoff.</p>
-          <input v-model.trim="recoveryForm.betslipLink" type="url" placeholder="Recovery betslip link" />
-          <input v-model.trim="recoveryForm.betslipCode" type="text" placeholder="Recovery betslip code" />
-          <div>
-            <button class="confirm-fail" :disabled="settlingId === release.public_id">Confirm failure &amp; grant recovery</button>
-            <button type="button" class="cancel-btn" @click="recoveryFor = null">Cancel</button>
-          </div>
-        </form>
-
-        <div v-if="release.result === 'failed'" class="recovery-count">
-          Recovery issued. Eligible users receive it in My Subscriptions and an in-app alert.
-        </div>
+        <div v-if="release.result === 'failed'" class="recovery-count">Recovery issued</div>
       </article>
     </div>
   </section>
@@ -99,7 +118,8 @@ export default {
       loading: true,
       publishing: false,
       settlingId: null,
-      recoveryFor: null,
+      issuingRecovery: false,
+      selectedReleaseIds: [],
       notice: '',
       noticeType: 'success',
       form: { groupId: '', cutoffAt: cutoff.toISOString().slice(0, 16), betslipLink: '', betslipCode: '' },
@@ -109,6 +129,9 @@ export default {
   computed: {
     paidReleases() {
       return this.releases.filter(item => item.type === 'paid')
+    },
+    recoveryCandidates() {
+      return this.paidReleases.filter(item => item.result === 'pending' && this.canSettle(item))
     }
   },
   mounted() {
@@ -124,6 +147,8 @@ export default {
       try {
         const { data } = await adminApi.get('/api/package-releases')
         this.releases = Array.isArray(data) ? data : []
+        const availableIds = new Set(this.recoveryCandidates.map(item => item.public_id))
+        this.selectedReleaseIds = this.selectedReleaseIds.filter(id => availableIds.has(id))
       } catch (error) {
         this.flash(error.response?.data?.message || 'Could not load ticket releases.', 'error')
       } finally {
@@ -157,29 +182,49 @@ export default {
     canSettle(release) {
       return Date.now() >= new Date(release.cutoff_at).getTime()
     },
-    openRecovery(release) {
-      this.recoveryFor = release.public_id
-      this.recoveryForm = { betslipLink: '', betslipCode: '' }
+    toggleRecovery(release) {
+      const index = this.selectedReleaseIds.indexOf(release.public_id)
+      if (index >= 0) this.selectedReleaseIds.splice(index, 1)
+      else this.selectedReleaseIds.push(release.public_id)
     },
     async settle(release, result) {
-      if (result === 'failed' && !this.recoveryForm.betslipLink && !this.recoveryForm.betslipCode) {
-        this.flash('Add a recovery betslip link or code.', 'error')
-        return
-      }
       this.settlingId = release.public_id
       try {
         await adminApi.post(`/api/package-releases/${release.public_id}/result`, {
-          result,
-          recoveryBetslipLink: result === 'failed' ? this.recoveryForm.betslipLink || null : null,
-          recoveryBetslipCode: result === 'failed' ? this.recoveryForm.betslipCode || null : null
+          result
         })
-        this.recoveryFor = null
-        this.flash(result === 'failed' ? 'Failure recorded and recovery tickets granted.' : 'Ticket marked as passed.')
+        this.flash('Ticket marked as passed.')
         await this.fetchReleases()
       } catch (error) {
         this.flash(error.response?.data?.message || 'Could not record the result.', 'error')
       } finally {
         this.settlingId = null
+      }
+    },
+    async issueRecovery() {
+      if (!this.selectedReleaseIds.length) {
+        this.flash('Select at least one package.', 'error')
+        return
+      }
+      if (!this.recoveryForm.betslipLink && !this.recoveryForm.betslipCode) {
+        this.flash('Add a recovery betslip link or code.', 'error')
+        return
+      }
+      this.issuingRecovery = true
+      try {
+        await adminApi.post('/api/package-releases/recovery', {
+          releaseIds: this.selectedReleaseIds,
+          recoveryBetslipLink: this.recoveryForm.betslipLink || null,
+          recoveryBetslipCode: this.recoveryForm.betslipCode || null
+        })
+        this.flash(`Recovery ticket issued for ${this.selectedReleaseIds.length} package${this.selectedReleaseIds.length === 1 ? '' : 's'}.`)
+        this.selectedReleaseIds = []
+        this.recoveryForm = { betslipLink: '', betslipCode: '' }
+        await this.fetchReleases()
+      } catch (error) {
+        this.flash(error.response?.data?.message || 'Could not issue the recovery ticket.', 'error')
+      } finally {
+        this.issuingRecovery = false
       }
     },
     formatDate(value) {
@@ -194,7 +239,6 @@ export default {
 .release-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
 .release-kicker { color:#ffd700; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; }
 .release-head h3 { margin:5px 0 6px; font-size:20px; }
-.release-head p { margin:0; max-width:720px; color:rgba(255,255,255,.56); font-size:13px; line-height:1.55; }
 .refresh-btn,.cancel-btn { background:transparent; color:rgba(255,255,255,.7); border:1px solid rgba(255,255,255,.15); border-radius:8px; padding:8px 12px; cursor:pointer; }
 .publish-form { display:grid; grid-template-columns:1fr 1fr 1.6fr 1fr auto; gap:12px; align-items:end; margin-top:22px; }
 .publish-form label { display:flex; flex-direction:column; gap:6px; color:rgba(255,255,255,.55); font-size:11px; font-weight:800; text-transform:uppercase; }
@@ -218,15 +262,27 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 .release-ticket a { color:#ffd700; }
 .release-ticket code { background:#050505; border-radius:6px; padding:5px 8px; color:#fff; }
 .settle-actions { display:flex; align-items:center; gap:8px; margin-top:14px; }
-.pass-btn,.fail-btn,.confirm-fail { border:0; border-radius:8px; padding:9px 12px; font-weight:800; cursor:pointer; }
+.pass-btn,.fail-btn { border:0; border-radius:8px; padding:9px 12px; font-weight:800; cursor:pointer; }
 .pass-btn { color:#72df9b; background:rgba(62,205,119,.12); }
-.fail-btn,.confirm-fail { color:#ff8585; background:rgba(255,82,82,.12); }
+.fail-btn { color:#ffd45c; background:rgba(255,193,7,.12); }
 .settle-hint { color:rgba(255,255,255,.38); font-size:12px; }
-.recovery-form { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; padding:14px; border-radius:10px; background:rgba(255,82,82,.06); }
-.recovery-form strong,.recovery-form p,.recovery-form div { grid-column:1/-1; }
-.recovery-form p,.recovery-count { color:rgba(255,255,255,.5); font-size:12px; margin:0; }
-.recovery-form div { display:flex; gap:8px; }
-.recovery-count { margin-top:12px; color:#ffb3b3; }
+.recovery-panel { margin-top:20px; padding:18px; border:1px solid rgba(255,215,0,.24); border-radius:13px; background:rgba(255,215,0,.045); }
+.recovery-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.recovery-heading h3 { margin:4px 0 0; font-size:18px; }
+.selection-count { padding:5px 8px; border-radius:999px; background:rgba(255,215,0,.11); color:#ffd700; font-size:10px; font-weight:850; text-transform:uppercase; }
+.recovery-form { display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:end; margin-top:15px; }
+.recovery-form > label { display:flex; flex-direction:column; gap:6px; color:rgba(255,255,255,.55); font-size:11px; font-weight:800; text-transform:uppercase; }
+.recovery-packages { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:8px; padding:0; border:0; }
+.recovery-option { display:grid; grid-template-columns:auto 1fr; column-gap:8px; align-items:center; min-width:180px; padding:9px 11px; border:1px solid rgba(255,255,255,.12); border-radius:9px; background:rgba(255,255,255,.035); cursor:pointer; }
+.recovery-option.selected { border-color:rgba(255,215,0,.55); background:rgba(255,215,0,.1); }
+.recovery-option input { width:15px; height:15px; grid-row:1/3; accent-color:#ffd700; }
+.recovery-option span { color:#fff; font-size:12px; font-weight:800; }
+.recovery-option small { color:rgba(255,255,255,.42); font-size:9px; }
+.recovery-empty { grid-column:1/-1; color:rgba(255,255,255,.4); font-size:12px; }
+.recovery-submit { border:0; border-radius:9px; padding:11px 15px; background:#ffd700; color:#111; font-weight:900; white-space:nowrap; cursor:pointer; }
+.recovery-count { margin-top:12px; color:#ffb3b3; font-size:12px; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width: 1050px) { .publish-form { grid-template-columns:1fr 1fr; } .publish-form .wide { grid-column:auto; } }
-@media (max-width: 640px) { .release-manager{padding:17px}.release-head{flex-direction:column}.publish-form,.recovery-form{grid-template-columns:1fr}.recovery-form strong,.recovery-form p,.recovery-form div{grid-column:auto}.release-summary{align-items:flex-start}.settle-actions{flex-wrap:wrap} }
+@media (max-width: 760px) { .recovery-form { grid-template-columns:1fr; } .recovery-packages,.recovery-empty { grid-column:auto; } }
+@media (max-width: 640px) { .release-manager{padding:17px}.release-head{flex-direction:column}.publish-form{grid-template-columns:1fr}.release-summary{align-items:flex-start}.settle-actions{flex-wrap:wrap}.recovery-heading{align-items:flex-start}.recovery-option{width:100%} }
 </style>

@@ -20,10 +20,15 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/server/__tests__/**/*.test.js"],
+    "testMatch": [
+      "**/server/__tests__/**/*.test.js"
+    ],
     "testTimeout": 15000
   },
   "dependencies": {
+    "@uppy/core": "^6.3.0",
+    "@uppy/dashboard": "^6.0.2",
+    "@uppy/vue": "^4.0.1",
     "axios": "^1.15.0",
     "bcryptjs": "^3.0.3",
     "core-js": "^3.8.3",
@@ -38,6 +43,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@babel/plugin-transform-private-methods": "^7.28.6",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
     "concurrently": "^8.2.2",
