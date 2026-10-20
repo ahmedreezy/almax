@@ -92,12 +92,18 @@
             <p v-if="error" class="support-error" role="alert">{{ error }}</p>
             <div v-if="selectedFiles.length || recording" class="attachment-preview" role="status" aria-live="polite">
               <span v-if="recording" class="recording-dot">Recording {{ recordingSeconds }}s / 120s</span>
-              <span v-for="file in selectedFiles" :key="file.name + file.size">{{ file.type.startsWith('image/') ? 'Image' : 'Voice note' }} · {{ file.name }}</span>
-              <button type="button" @click="clearAttachments">Remove</button>
+              <div v-if="selectedFiles.length" class="attachment-preview-grid">
+                <article v-for="file in selectedFiles" :key="fileKey(file)" class="attachment-preview-card">
+                  <img v-if="file.type.startsWith('image/')" :src="previewForFile(file)" :alt="file.name" />
+                  <audio v-else :src="previewForFile(file)" controls preload="metadata"></audio>
+                  <span>{{ file.type.startsWith('image/') ? file.name : 'Voice note' }}</span>
+                  <button type="button" :aria-label="`Remove ${file.name}`" @click="removeSelectedFile(file)">×</button>
+                </article>
+              </div>
+              <button v-if="selectedFiles.length > 1" type="button" class="clear-attachments" @click="clearAttachments">Remove all</button>
             </div>
             <form class="support-composer" @submit.prevent="sendMessage">
-              <input ref="imageInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple @change="selectImages" />
-              <button type="button" class="composer-tool" aria-label="Attach screenshots" :disabled="sending || recording" @click="$refs.imageInput.click()">＋</button>
+              <button type="button" class="composer-tool" aria-label="Attach screenshots" :disabled="sending || recording" @click="openMediaPicker">＋</button>
               <label for="support-message-input" class="sr-only">Message Almax Support</label>
               <textarea
                 id="support-message-input"
@@ -136,16 +142,36 @@
         </div>
       </transition>
     </Teleport>
+    <DashboardModal
+      :uppy="uppy"
+      :open="uppyOpen"
+      :props="uppyDashboardOptions"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios'
+import Uppy from '@uppy/core'
+import DashboardModal from '@uppy/vue/dashboard-modal'
+import { markRaw } from 'vue'
+import '@uppy/core/css/style.min.css'
+import '@uppy/dashboard/css/style.min.css'
 import { clearUser, getToken, getUser } from '../utils/userAuth.js'
 
 export default {
   name: 'SupportChat',
+  components: { DashboardModal },
   data() {
+    const uppy = markRaw(new Uppy({
+      id: 'almax-support-images',
+      autoProceed: false,
+      restrictions: {
+        maxFileSize: 8 * 1024 * 1024,
+        maxNumberOfFiles: 3,
+        allowedFileTypes: ['image/png', 'image/jpeg', 'image/webp']
+      }
+    }))
     return {
       isOpen: false,
       loading: false,
@@ -159,7 +185,10 @@ export default {
       pollStartedAt: 0,
       waitingSeconds: 0,
       hasUnread: false,
+      uppy,
+      uppyOpen: false,
       selectedFiles: [],
+      selectedPreviewUrls: {},
       attachmentUrls: {},
       mediaRecorder: null,
       recording: false,
@@ -171,7 +200,15 @@ export default {
         'Where can I see my subscription?',
         'Help me check a payment',
         'I want to share feedback'
-      ]
+      ],
+      uppyDashboardOptions: {
+        onRequestCloseModal: () => { this.uppyOpen = false },
+        closeModalOnClickOutside: true,
+        disableStatusBar: true,
+        proudlyDisplayPoweredByUppy: false,
+        note: 'PNG, JPEG or WEBP · up to 3 images · 8 MB each',
+        singleFileFullScreen: true
+      }
     }
   },
   computed: {
@@ -204,6 +241,9 @@ export default {
     }
   },
   mounted() {
+    this.uppy.on('files-added', this.syncUppyFiles)
+    this.uppy.on('file-removed', this.syncUppyFiles)
+    this.uppy.on('restriction-failed', this.handleUppyRestriction)
     window.addEventListener('user-auth-changed', this.handleAuthChange)
     window.addEventListener('user-logged-out', this.handleLogout)
   },
@@ -212,6 +252,8 @@ export default {
     window.removeEventListener('user-logged-out', this.handleLogout)
     this.stopPolling()
     this.stopRecording(true)
+    this.revokeSelectedPreviews()
+    this.uppy.destroy()
     Object.values(this.attachmentUrls).forEach(url => URL.revokeObjectURL(url))
     document.body.style.overflow = ''
   },
@@ -312,7 +354,11 @@ export default {
         sender: 'user',
         senderType: 'customer',
         body: body || (this.selectedFiles[0]?.type.startsWith('image/') ? 'Please review this screenshot.' : 'Voice note'),
-        attachments: this.selectedFiles.map((file, index) => ({ id: `pending-file-${index}`, kind: file.type.startsWith('image/') ? 'image' : 'audio' })),
+        attachments: this.selectedFiles.map((file, index) => ({
+          id: `pending-file-${index}`,
+          kind: file.type.startsWith('image/') ? 'image' : 'audio',
+          blobUrl: this.previewForFile(file)
+        })),
         sentAt: new Date().toISOString()
       }
       this.scrollToBottom()
@@ -351,19 +397,42 @@ export default {
       this.draft = suggestion
       this.$nextTick(() => this.$refs.input?.focus())
     },
-    selectImages(event) {
-      const files = Array.from(event.target.files || []).slice(0, 3)
-      if (files.some(file => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-        this.error = 'Please choose PNG, JPEG, or WEBP images.'
-        return
-      }
-      if (files.some(file => file.size > 8 * 1024 * 1024)) {
-        this.error = 'Each image must be 8 MB or smaller.'
-        return
-      }
-      this.selectedFiles = files
+    openMediaPicker() {
+      if (this.selectedFiles.some(file => !file.type.startsWith('image/'))) this.clearAttachments()
+      this.uppyOpen = true
+    },
+    syncUppyFiles() {
+      this.setSelectedFiles(this.uppy.getFiles().map(file => file.data))
       this.error = ''
-      event.target.value = ''
+    },
+    handleUppyRestriction(file, error) {
+      this.error = error?.message || 'Choose up to three PNG, JPEG, or WEBP images of 8 MB or less.'
+    },
+    fileKey(file) {
+      return `${file.name}-${file.size}-${file.lastModified || 0}`
+    },
+    previewForFile(file) {
+      return this.selectedPreviewUrls[this.fileKey(file)] || ''
+    },
+    setSelectedFiles(files) {
+      this.revokeSelectedPreviews()
+      this.selectedFiles = files
+      this.selectedPreviewUrls = files.reduce((urls, file) => {
+        urls[this.fileKey(file)] = URL.createObjectURL(file)
+        return urls
+      }, {})
+    },
+    revokeSelectedPreviews() {
+      Object.values(this.selectedPreviewUrls).forEach(url => URL.revokeObjectURL(url))
+      this.selectedPreviewUrls = {}
+    },
+    removeSelectedFile(file) {
+      const uppyFile = this.uppy.getFiles().find(item => item.data === file)
+      if (uppyFile) {
+        this.uppy.removeFile(uppyFile.id)
+        return
+      }
+      this.setSelectedFiles(this.selectedFiles.filter(item => item !== file))
     },
     async toggleRecording() {
       if (this.recording) {
@@ -387,7 +456,8 @@ export default {
           const type = this.mediaRecorder.mimeType || 'audio/webm'
           const extension = type.includes('ogg') ? 'ogg' : (type.includes('mp4') ? 'm4a' : 'webm')
           const blob = new Blob(this.audioChunks, { type })
-          this.selectedFiles = [new File([blob], `voice-note-${Date.now()}.${extension}`, { type })]
+          this.uppy.cancelAll()
+          this.setSelectedFiles([new File([blob], `voice-note-${Date.now()}.${extension}`, { type })])
         }
         this.mediaRecorder.start(250)
         this.recording = true
@@ -415,7 +485,8 @@ export default {
     },
     clearAttachments() {
       if (this.recording) this.stopRecording(true)
-      this.selectedFiles = []
+      this.uppy.cancelAll()
+      this.setSelectedFiles([])
       this.recordingSeconds = 0
     },
     async hydrateAttachments() {
@@ -599,8 +670,14 @@ export default {
 .support-typing em { margin-left: 5px; color: var(--text-muted); font-size: 10px; font-style: normal; }
 .support-error { padding: 8px clamp(16px, 4vw, 30px) 0; background: rgba(10, 11, 9, .48); font-size: 11px; }
 .support-error { color: #ff7e7e; }
-.attachment-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px clamp(14px, 3vw, 24px); border-top: 1px solid rgba(255,255,255,.08); background: rgba(10,11,9,.72); color: var(--text-muted); font-size: 11px; }
-.attachment-preview button { margin-left: auto; border: 0; background: transparent; color: #ff8585; cursor: pointer; }
+.attachment-preview { display:flex; align-items:center; gap:10px; padding:10px clamp(14px,3vw,24px); border-top:1px solid rgba(255,255,255,.08); background:rgba(10,11,9,.72); color:var(--text-muted); font-size:11px; }
+.attachment-preview-grid { display:flex; gap:9px; min-width:0; overflow-x:auto; padding:2px; }
+.attachment-preview-card { position:relative; width:86px; min-width:86px; display:flex; flex-direction:column; gap:4px; }
+.attachment-preview-card img { width:86px; height:66px; object-fit:cover; border:1px solid rgba(255,215,0,.28); border-radius:10px; background:#080808; }
+.attachment-preview-card audio { width:210px; height:38px; }
+.attachment-preview-card span { overflow:hidden; color:rgba(255,255,255,.62); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.attachment-preview-card button { position:absolute; top:-5px; right:-5px; width:20px; height:20px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.2); border-radius:50%; background:#27231b; color:#fff; font-size:15px; line-height:1; cursor:pointer; }
+.attachment-preview .clear-attachments { margin-left:auto; border:0; background:transparent; color:#ff8585; white-space:nowrap; cursor:pointer; }
 .recording-dot { display: inline-flex; align-items: center; gap: 7px; color: #ff8b8b; font-weight: 750; }
 .recording-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #ff5252; box-shadow: 0 0 0 0 rgba(255,82,82,.5); animation: recordingPulse 1.35s ease-out infinite; }
 @keyframes recordingPulse { 70% { box-shadow: 0 0 0 7px rgba(255,82,82,0); } 100% { box-shadow: 0 0 0 0 rgba(255,82,82,0); } }
@@ -637,6 +714,8 @@ body.light-mode .support-messages { background: rgba(255, 252, 237, .3); }
 body.light-mode .support-back { color: #242117; border-color: rgba(45, 39, 15, .16); background: rgba(255, 255, 255, .42); }
 body.light-mode .from-support p, body.light-mode .support-suggestions button, body.light-mode .support-typing { background: rgba(255, 255, 255, .58); color: #1d1b14; border-color: rgba(45, 39, 15, .14); }
 body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7); border-color: rgba(45, 39, 15, .16); }
+body.light-mode .attachment-preview { background:rgba(255,255,255,.62); }
+body.light-mode .attachment-preview-card span { color:rgba(20,18,10,.62); }
 
 @media (max-width: 700px) {
   .support-launcher { right: 14px; bottom: 16px; min-height: 52px; padding: 9px 12px; }
@@ -666,4 +745,10 @@ body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7)
   .composer-action-enter-active, .composer-action-leave-active { transition: none; }
   .recording-dot::before { animation: none; }
 }
+</style>
+
+<style>
+.uppy-Dashboard--modal { z-index: 11050 !important; }
+.uppy-Dashboard-inner { border-radius: 18px !important; }
+.uppy-Dashboard-AddFiles-title { color: #242117; }
 </style>
