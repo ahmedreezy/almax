@@ -83,8 +83,8 @@
               </div>
             </div>
             <div class="pick-footer">
-              <button v-if="!pick.groupId || !subscribedGroupIds.has(Number(pick.groupId))" class="pick-vip-btn" @click="openVipMenu(pick.groupId || null)">
-                👑 Join VIP
+              <button v-if="!pick.groupId || !subscribedGroupIds.has(Number(pick.groupId))" class="pick-vip-btn" @click="openVipForPick(pick)">
+                👑 {{ isPickPackageAvailable(pick) ? 'Join VIP' : 'View Active Packages' }}
               </button>
               <template v-else>
                 <span class="pick-vip-active-tag">👑 VIP</span>
@@ -883,6 +883,14 @@ export default {
     },
     effectiveGroupPrice(group) {
       return (group.isSpecial && group.specialPrice != null) ? group.specialPrice : group.price
+    },
+    isPickPackageAvailable(pick) {
+      if (!pick?.groupId) return false
+      return this.groups.some(group => Number(group.id) === Number(pick.groupId))
+    },
+    openVipForPick(pick) {
+      const groupId = this.isPickPackageAvailable(pick) ? pick.groupId : null
+      this.openVipMenu(groupId)
     },
     async fetchUserActiveSub() {
       try {

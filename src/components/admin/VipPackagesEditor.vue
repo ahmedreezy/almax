@@ -70,7 +70,9 @@
                   @change="pkg._dirty = true"
                   title="Block new subscriptions after this date and time (leave blank for no deadline)"
                 />
-                <span v-if="pkg._deadline" class="field-hint">Closes {{ formatDeadline(pkg._deadline) }}</span>
+                <span v-if="pkg._deadline" :class="['field-hint', { 'field-hint--expired': isPastDeadline(pkg._deadline) }]">
+                  {{ isPastDeadline(pkg._deadline) ? 'Expired — hidden from users' : `Closes ${formatDeadline(pkg._deadline)}` }}
+                </span>
               </td>
 
               <!-- Betslip link -->
@@ -137,8 +139,8 @@
             <span class="panel-kicker">Special Odds</span>
             <h3>Daily Special Offer</h3>
           </div>
-          <span :class="['special-status', specialPackage && specialPackage._isActive && specialPackage._specialPrice !== '' ? 'is-live' : 'is-hidden']">
-            {{ specialPackage && specialPackage._isActive && specialPackage._specialPrice !== '' ? 'Visible to users' : 'Hidden from users' }}
+          <span :class="['special-status', isPackagePublic(specialPackage) ? 'is-live' : 'is-hidden']">
+            {{ packageVisibilityLabel(specialPackage) }}
           </span>
         </div>
 
@@ -325,6 +327,15 @@ export default {
         hour: 'numeric',
         minute: '2-digit'
       })
+    },
+    isPackagePublic(pkg) {
+      if (!pkg || !pkg._isActive || this.isPastDeadline(pkg._deadline)) return false
+      return !pkg._isSpecial || pkg._specialPrice !== ''
+    },
+    packageVisibilityLabel(pkg) {
+      if (!pkg || !pkg._isActive || (pkg._isSpecial && pkg._specialPrice === '')) return 'Hidden from users'
+      if (this.isPastDeadline(pkg._deadline)) return 'Deadline passed — hidden'
+      return 'Visible to users'
     },
     async fetchPackages() {
       this.loading    = true
@@ -664,6 +675,7 @@ export default {
 }
 .field-url:focus, .field-code:focus, .field-sm:focus, .field-deadline:focus { border-color: rgba(255,215,0,0.4); }
 .field-hint { display: block; font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 3px; }
+.field-hint--expired { color: #ff8a80; font-weight: 700; }
 
 /* Toggle */
 .toggle { position: relative; display: inline-flex; cursor: pointer; }
