@@ -89,7 +89,7 @@
               <p class="kpi-sub">{{ formatUGX(c.total_withdrawn) }} withdrawn</p>
             </div>
             <div class="kpi-card kpi-teal">
-              <p class="kpi-label">Overall Commission</p>
+              <p class="kpi-label">Recorded Commission</p>
               <p class="kpi-value">{{ formatUGX(c.total_earned) }}</p>
               <p class="kpi-sub">{{ formatUGX(c.wallet_received ?? c.total_paid) }} sent to JPESA</p>
             </div>
@@ -190,13 +190,20 @@
             <div class="kpi-card kpi-red">
               <p class="kpi-label">Failed Payments</p>
               <p class="kpi-value kpi-value--md">{{ formatNum(f.by_status?.failed?.count ?? 0) }}</p>
-              <p class="kpi-sub">{{ formatUGX(f.by_status?.failed?.amount ?? 0) }} lost</p>
+              <p class="kpi-sub">{{ formatUGX(f.by_status?.failed?.amount ?? 0) }} attempted, not collected</p>
             </div>
             <div class="kpi-card kpi-blue">
-              <p class="kpi-label">This Month</p>
-              <p class="kpi-value kpi-value--md">{{ formatUGX(f.revenue_this_month) }}</p>
-              <p class="kpi-sub">{{ formatUGX(f.revenue_this_week) }} this week</p>
+              <p class="kpi-label">All Payment Attempts</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(f.attempted_amount) }}</p>
+              <p class="kpi-sub">{{ formatNum(f.attempted_count) }} attempts · {{ Number(f.confirmation_rate || 0).toFixed(1) }}% confirmed</p>
             </div>
+          </div>
+
+          <div class="finance-reconcile" :class="Number(f.reconciliation_difference || 0) === 0 ? 'finance-reconcile--ok' : 'finance-reconcile--warn'">
+            <span>This month: <strong>{{ formatUGX(f.revenue_this_month) }}</strong></span>
+            <span>This week: <strong>{{ formatUGX(f.revenue_this_week) }}</strong></span>
+            <span>Unclassified: <strong>{{ formatUGX(f.unclassified_amount) }}</strong> ({{ formatNum(f.unclassified_count) }})</span>
+            <span>Ledger difference: <strong>{{ formatUGX(f.reconciliation_difference) }}</strong></span>
           </div>
 
           <div class="two-col-grid" style="margin-top:24px">
@@ -284,7 +291,7 @@
                 <span class="comm-stat-val" :class="currentCommission > 0 ? 'text-gold' : ''">{{ formatUGX(currentCommission) }}</span>
               </div>
               <div class="comm-stat">
-                <span class="comm-stat-label">Overall</span>
+                <span class="comm-stat-label">Recorded</span>
                 <span class="comm-stat-val">{{ formatUGX(c.total_earned) }}</span>
               </div>
             </div>
@@ -293,9 +300,9 @@
           <!-- Commission KPI cards -->
           <div class="kpi-grid" style="margin-top:20px">
             <div class="kpi-card kpi-gold">
-              <p class="kpi-label">Total Overall</p>
+              <p class="kpi-label">Recorded Total</p>
               <p class="kpi-value">{{ formatUGX(c.total_earned) }}</p>
-              <p class="kpi-sub">All time commission</p>
+              <p class="kpi-sub">All tracked commission</p>
             </div>
             <div class="kpi-card kpi-green">
               <p class="kpi-label">Available Now</p>
@@ -311,6 +318,29 @@
               <p class="kpi-label">Sent to JPESA</p>
               <p class="kpi-value kpi-value--md">{{ formatUGX(c.wallet_received ?? c.total_paid) }}</p>
               <p class="kpi-sub">{{ formatNum(c.by_status?.completed?.count ?? 0) }} transfers completed</p>
+            </div>
+          </div>
+
+          <div class="kpi-grid" style="margin-top:14px">
+            <div class="kpi-card">
+              <p class="kpi-label">Pending Commission</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.pending?.amount ?? 0) }}</p>
+              <p class="kpi-sub">{{ formatNum(c.by_status?.pending?.count ?? 0) }} queued transfers</p>
+            </div>
+            <div class="kpi-card">
+              <p class="kpi-label">Processing Commission</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.processing?.amount ?? 0) }}</p>
+              <p class="kpi-sub">{{ formatNum(c.by_status?.processing?.count ?? 0) }} transfers in progress</p>
+            </div>
+            <div class="kpi-card kpi-red">
+              <p class="kpi-label">Failed Commission</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.failed?.amount ?? 0) }}</p>
+              <p class="kpi-sub">{{ formatNum(c.by_status?.failed?.count ?? 0) }} transfers need retry</p>
+            </div>
+            <div class="kpi-card" :class="Number(c.untracked_payment_count || 0) ? 'kpi-warn' : 'kpi-green'">
+              <p class="kpi-label">Commission Coverage</p>
+              <p class="kpi-value kpi-value--md">{{ formatNum(c.tracked_payment_count) }} / {{ formatNum(c.confirmed_payment_count) }}</p>
+              <p class="kpi-sub">{{ formatUGX(c.untracked_payment_revenue) }} confirmed revenue untracked</p>
             </div>
           </div>
 
@@ -425,7 +455,7 @@
                     <th>Plan</th>
                     <th>Method</th>
                     <th>Payment</th>
-                    <th>Commission (10%)</th>
+                    <th>Commission ({{ (Number(c.ratio || 0) * 100).toFixed(1) }}%)</th>
                     <th>Status</th>
                     <th>Action</th>
                   </tr>
@@ -1371,6 +1401,23 @@ export default {
   color: #4b5563;
   margin: 6px 0 0;
 }
+
+.finance-reconcile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  background: #0d1422;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.finance-reconcile strong { color: #d1d5db; }
+.finance-reconcile--ok { border-left: 3px solid #10b981; }
+.finance-reconcile--warn { border-left: 3px solid #ef4444; }
 
 /* ── Charts ──────────────────────────────────────────────────────────────── */
 .chart-row {

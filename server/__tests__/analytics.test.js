@@ -89,12 +89,17 @@ describe('GET /api/analytics/developer', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.finance.total_revenue).toBe(530000)
+    expect(res.body.finance.attempted_count).toBe(3)
+    expect(res.body.finance.attempted_amount).toBe(550000)
+    expect(res.body.finance.reconciliation_difference).toBe(0)
     expect(res.body.commission.ratio).toBe(0.1)
     expect(res.body.commission.tracked_payments_total).toBe(10000)
     expect(res.body.commission.total_earned).toBe(1000)
     expect(res.body.commission.outstanding).toBe(1000)
     expect(res.body.commission.by_status.pending.amount).toBe(1000)
     expect(res.body.commission.recent).toHaveLength(1)
+    expect(res.body.commission.untracked_payment_count).toBe(1)
+    expect(res.body.commission.untracked_payment_revenue).toBe(520000)
   })
 
   test('rejects non-developer admin tokens', async () => {

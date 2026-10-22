@@ -31,11 +31,6 @@ function isDeadlineClosed(value) {
   return !!deadline && kampalaNowInput() > deadline
 }
 
-function isPastOrCurrentDeadline(value) {
-  const deadline = normalizeDeadlineForCompare(value)
-  return !!deadline && kampalaNowInput() >= deadline
-}
-
 function toBoolean(value) {
   if (value === undefined) return undefined
   if (typeof value === 'boolean') return value
@@ -64,6 +59,7 @@ function formatGroup(g) {
     isActive:             g.is_active     !== false,
     specialPrice:         g.special_price != null ? parseFloat(g.special_price) : null,
     specialOdds:          g.special_odds  || null,
+    photoUrl:             g.photo_url     || '',
     subscriptionDeadline: g.subscription_deadline || null,
     isClosed:             isDeadlineClosed(g.subscription_deadline)
   }
@@ -73,10 +69,10 @@ function formatGroup(g) {
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM groups ORDER BY price ASC')
-    // Hide inactive/expired groups, and special groups that aren't priced today.
+    // Active packages remain visible after their deadline; formatGroup marks
+    // them closed so checkout can be disabled in the client.
     const visible = rows.filter(g => {
       if (!g.is_active) return false
-      if (isDeadlineClosed(g.subscription_deadline)) return false
       if (g.is_special) return g.special_price != null
       return true
     })
@@ -133,16 +129,6 @@ router.patch('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const { rows: currentRows } = await pool.query('SELECT * FROM groups WHERE id = $1', [id])
     if (currentRows.length === 0) return res.status(404).json({ error: 'Group not found' })
-
-    const current = currentRows[0]
-    const nextActive = parsedIsActive !== undefined ? parsedIsActive : current.is_active !== false
-    const nextDeadline = subscriptionDeadline !== undefined
-      ? (subscriptionDeadline || null)
-      : current.subscription_deadline
-
-    if (nextActive && isPastOrCurrentDeadline(nextDeadline)) {
-      return res.status(400).json({ error: 'Packages with past deadlines cannot be activated. Set a future deadline first.' })
-    }
 
     vals.push(id)
     const { rows } = await pool.query(
