@@ -46,21 +46,23 @@
       </div>
     </div>
 
-    <!-- ── TODAY'S FOOTBALL PICKS ── -->
+    <!-- ── ACTIVE VIP PACKAGES ── -->
     <div class="container picks-container">
       <div class="section-header sh-row">
         <div class="sh-left">
-          <h2>TODAY'S <span class="gold-text">ALMAX PICKS</span></h2>
-          <p class="section-sub">Hand-picked by our analysts — free daily tips</p>
+          <h2>ACTIVE <span class="gold-text">VIP PACKAGES</span></h2>
+          <p class="section-sub">Open packages can be purchased; expired packages remain visible as closed</p>
         </div>
         <div class="today-date-badge">{{ todayFormatted }}</div>
       </div>
 
-      <div v-if="displayedPicks.length" class="picks-grid">
-        <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
-          <!-- Full-width image -->
+      <div v-if="groupsLoading && !groups.length" class="picks-empty-state">
+        <p>Loading active packages…</p>
+      </div>
+      <div v-else-if="displayedPackages.length" class="picks-grid">
+        <div v-for="group in displayedPackages" :key="group.id" class="pick-card" :class="{ 'pick-card--closed': group.isClosed }">
           <div class="pick-img-bar">
-            <img v-if="pick.imageUrl || pick.image_url" :src="pick.imageUrl || pick.image_url" :alt="pick.caption || 'prediction'" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(pick.imageUrl || pick.image_url)" />
+            <img v-if="group.photoUrl" :src="resolvePhotoUrl(group.photoUrl)" :alt="group.name" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(resolvePhotoUrl(group.photoUrl))" />
             <div v-else class="pick-img-placeholder">
               <svg viewBox="0 0 80 54" width="56" height="38" xmlns="http://www.w3.org/2000/svg" opacity="0.3">
                 <path d="M14,4 L2,18 L14,18 L14,50 L66,50 L66,18 L78,18 L66,4 L54,10 L48,7 L40,9 L32,7 L26,10 Z"
@@ -68,36 +70,35 @@
               </svg>
             </div>
           </div>
-          <!-- content -->
           <div class="pick-body">
-            <!-- Caption -->
-            <p v-if="pick.caption" class="pick-caption">{{ pick.caption }}</p>
-            <!-- Win probability -->
-            <div class="pick-prob-bar">
-              <div class="pick-prob-header">
-                <span class="pick-prob-label">⚡ WIN PROB</span>
-                <span class="pick-prob-val">{{ pick.winProb || pick.win_prob || 75 }}%</span>
-              </div>
-              <div class="pick-prob-track">
-                <div class="pick-prob-fill" :style="{ width: (pick.winProb || pick.win_prob || 75) + '%' }"></div>
-              </div>
+            <p class="pick-caption">{{ group.name }}</p>
+            <div class="pick-package-meta">
+              <span>{{ planDuration(group.planType) }}</span>
+              <span v-if="group.isClosed" class="pick-package-closed">Closed</span>
+              <span v-else-if="group.subscriptionDeadline">Closes {{ formatDeadline(group.subscriptionDeadline) }}</span>
+            </div>
+            <div class="pick-package-price">
+              {{ effectiveGroupPrice(group).toLocaleString() }} <small>UGX</small>
             </div>
             <div class="pick-footer">
-              <button v-if="!pick.groupId || !subscribedGroupIds.has(Number(pick.groupId))" class="pick-vip-btn" @click="openVipForPick(pick)">
-                👑 {{ isPickPackageAvailable(pick) ? 'Join VIP' : 'View Active Packages' }}
+              <button
+                v-if="!subscribedGroupIds.has(Number(group.id))"
+                class="pick-vip-btn"
+                @click="openVipMenu(group.id)"
+              >
+                {{ group.isClosed ? '🔒 View Closed' : '👑 Join VIP' }}
               </button>
               <template v-else>
                 <span class="pick-vip-active-tag">👑 VIP</span>
                 <button class="pick-vip-plans-btn" @click="openMySubscriptions">View Plans</button>
-                <button class="pick-vip-add-btn" @click="openVipMenu(pick.groupId || null)" title="Get another package">＋</button>
+                <button class="pick-vip-add-btn" @click="openVipMenu(group.id)" title="View package">＋</button>
               </template>
             </div>
           </div>
         </div>
       </div>
       <div v-else class="picks-empty-state">
-        <p>No active prediction packages are available right now.</p>
-        <button class="pick-vip-btn" @click="openVipMenu()">👑 View Active Packages</button>
+        <p>No active packages are available right now.</p>
       </div>
 
       <!-- Goalpost cartoon accent -->
@@ -732,8 +733,12 @@ export default {
       })
       return ids
     },
-    displayedPicks() {
-      return this.todayPicks.filter(pick => !pick.groupId || this.isPickPackageAvailable(pick))
+    displayedPackages() {
+      return this.groups.filter(group => {
+        if (!group.isActive) return false
+        if (group.isSpecial) return group.specialPrice != null
+        return true
+      })
     },
     pollCountdown() {
       const m = Math.floor(this.pollSecondsLeft / 60)
@@ -741,12 +746,7 @@ export default {
       return m + ':' + String(s).padStart(2, '0')
     },
     visibleGroups() {
-      const active = this.groups.filter(g => {
-        if (!g.isActive) return false
-        if (g.isClosed) return false
-        if (g.isSpecial) return g.specialPrice != null
-        return true
-      })
+      const active = this.displayedPackages
       // If user clicked from a specific pick, show only the linked package
       if (this.linkedGroupId) {
         const lid = Number(this.linkedGroupId)
@@ -890,14 +890,6 @@ export default {
     },
     effectiveGroupPrice(group) {
       return (group.isSpecial && group.specialPrice != null) ? group.specialPrice : group.price
-    },
-    isPickPackageAvailable(pick) {
-      if (!pick?.groupId) return false
-      return this.groups.some(group => Number(group.id) === Number(pick.groupId))
-    },
-    openVipForPick(pick) {
-      const groupId = this.isPickPackageAvailable(pick) ? pick.groupId : null
-      this.openVipMenu(groupId)
     },
     async fetchUserActiveSub() {
       try {
@@ -1480,6 +1472,12 @@ export default {
   transform: translateY(-5px);
   box-shadow: 0 10px 36px rgba(0,0,0,0.35);
 }
+.pick-card--closed {
+  animation: none;
+  border-color: rgba(255,255,255,0.1);
+  opacity: 0.78;
+}
+.pick-card--closed:hover { transform: none; }
 
 /* Kit top strip */
 /* Image bar */
@@ -1515,12 +1513,42 @@ export default {
 }
 /* Caption */
 .pick-caption {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--white);
   line-height: 1.5;
   margin: 0;
   opacity: 0.92;
+}
+.pick-package-meta {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pick-package-closed {
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.pick-package-price {
+  margin-top: auto;
+  color: var(--gold);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+.pick-package-price small {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.8px;
 }
 
 /* ── Win probability bar ── */
@@ -1567,6 +1595,13 @@ export default {
   animation: vipBeep 1.6s ease-out infinite;
 }
 .pick-vip-btn:hover { opacity: 0.88; transform: scale(1.04); }
+.pick-vip-btn:disabled {
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.55);
+  cursor: not-allowed;
+  animation: none;
+}
+.pick-vip-btn:disabled:hover { opacity: 1; transform: none; }
 
 /* VIP active tag (replaces Join VIP button when user has active sub) */
 .pick-vip-active-tag {

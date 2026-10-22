@@ -80,7 +80,10 @@ function lastThirtyDaySeries(now) {
 
 function commissionStatus(row) {
   const status = String(row.agent_commission_status || 'pending').toLowerCase()
-  if (['completed', 'processing', 'pending'].includes(status)) return status
+  if (['sent', 'completed'].includes(status)) return 'completed'
+  if (['processing', 'pending', 'failed', 'failure', 'error'].includes(status)) {
+    return ['failure', 'error'].includes(status) ? 'failed' : status
+  }
   return 'pending'
 }
 
@@ -129,20 +132,26 @@ router.get('/developer', auth, requireDeveloper, async (_req, res) => {
 
     const enabled = isCommissionEnabled()
     const commissionRate = getCommissionRate()
-    const trackedCommissionRows = enabled
-      ? paymentRows.filter(row =>
-          row.status === 'confirmed' &&
-          row.agent_commission_amount !== null &&
-          row.agent_commission_amount !== undefined &&
-          amount(row.agent_commission_amount) > 0 &&
-          String(row.agent_commission_status || '').toLowerCase() !== 'failed'
-        )
-      : []
+    const trackedCommissionRows = paymentRows.filter(row =>
+      row.status === 'confirmed' &&
+      row.agent_commission_amount !== null &&
+      row.agent_commission_amount !== undefined &&
+      amount(row.agent_commission_amount) > 0
+    )
+    const untrackedCommissionRows = confirmedPayments.filter(row =>
+      row.agent_commission_amount === null ||
+      row.agent_commission_amount === undefined ||
+      amount(row.agent_commission_amount) <= 0
+    )
     const trackedPaymentsTotal = sum(trackedCommissionRows, p => p.amount)
     const confirmedCommission = sum(trackedCommissionRows, p => p.agent_commission_amount)
     const completedCommissionRows = trackedCommissionRows.filter(row => commissionStatus(row) === 'completed')
     const processingCommissionRows = trackedCommissionRows.filter(row => commissionStatus(row) === 'processing')
     const pendingCommissionRows = trackedCommissionRows.filter(row => commissionStatus(row) === 'pending')
+    const failedCommissionRows = trackedCommissionRows.filter(row => commissionStatus(row) === 'failed')
+    const paymentStatusTotals = statusTotals(paymentRows)
+    const knownPaymentStatuses = new Set(['confirmed', 'pending', 'failed'])
+    const unclassifiedPayments = paymentRows.filter(row => !knownPaymentStatuses.has(row.status))
 
     const activeSubscriptions = subscriptionRows.filter(s => s.status === 'active')
 
@@ -155,13 +164,19 @@ router.get('/developer', auth, requireDeveloper, async (_req, res) => {
         failed_count: paymentRows.filter(p => p.status === 'failed').length
       },
       finance: {
+        attempted_count: paymentRows.length,
+        attempted_amount: sum(paymentRows, p => p.amount),
         total_revenue: sum(confirmedPayments, p => p.amount),
         revenue_today: sum(revenueToday, p => p.amount),
         revenue_this_week: sum(revenueThisWeek, p => p.amount),
         revenue_this_month: sum(revenueThisMonth, p => p.amount),
-        by_status: statusTotals(paymentRows),
+        by_status: paymentStatusTotals,
         by_plan: sumBy(confirmedPayments, p => p.plan_type, p => p.amount),
-        by_method: sumBy(confirmedPayments, p => p.payment_method, p => p.amount)
+        by_method: sumBy(confirmedPayments, p => p.payment_method, p => p.amount),
+        unclassified_count: unclassifiedPayments.length,
+        unclassified_amount: sum(unclassifiedPayments, p => p.amount),
+        reconciliation_difference: 0,
+        confirmation_rate: paymentRows.length ? (confirmedPayments.length / paymentRows.length) * 100 : 0
       },
       commission: {
         enabled,
@@ -171,7 +186,17 @@ router.get('/developer', auth, requireDeveloper, async (_req, res) => {
         total_earned: confirmedCommission,
         gross_total_earned: confirmedCommission,
         total_paid: sum(completedCommissionRows, p => p.agent_commission_amount),
-        outstanding: sum([...pendingCommissionRows, ...processingCommissionRows], p => p.agent_commission_amount),
+        wallet_received: sum(completedCommissionRows, p => p.agent_commission_amount),
+        total_withdrawn: 0,
+        available: sum(completedCommissionRows, p => p.agent_commission_amount),
+        outstanding: sum([...pendingCommissionRows, ...processingCommissionRows, ...failedCommissionRows], p => p.agent_commission_amount),
+        tracked_payment_count: trackedCommissionRows.length,
+        tracked_payment_revenue: trackedPaymentsTotal,
+        confirmed_payment_count: confirmedPayments.length,
+        confirmed_payment_revenue: sum(confirmedPayments, p => p.amount),
+        untracked_payment_count: untrackedCommissionRows.length,
+        untracked_payment_revenue: sum(untrackedCommissionRows, p => p.amount),
+        reconciliation_difference: 0,
         by_status: {
           completed: {
             count: completedCommissionRows.length,
@@ -185,7 +210,10 @@ router.get('/developer', auth, requireDeveloper, async (_req, res) => {
             count: pendingCommissionRows.length,
             amount: sum(pendingCommissionRows, p => p.agent_commission_amount)
           },
-          failed: { count: 0, amount: 0 }
+          failed: {
+            count: failedCommissionRows.length,
+            amount: sum(failedCommissionRows, p => p.agent_commission_amount)
+          }
         },
         by_plan: sumBy(trackedCommissionRows, p => p.plan_type, p => p.agent_commission_amount),
         by_method: sumBy(trackedCommissionRows, p => p.payment_method, p => p.agent_commission_amount),

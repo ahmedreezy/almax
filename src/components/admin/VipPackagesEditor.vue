@@ -71,7 +71,7 @@
                   title="Block new subscriptions after this date and time (leave blank for no deadline)"
                 />
                 <span v-if="pkg._deadline" :class="['field-hint', { 'field-hint--expired': isPastDeadline(pkg._deadline) }]">
-                  {{ isPastDeadline(pkg._deadline) ? 'Expired — hidden from users' : `Closes ${formatDeadline(pkg._deadline)}` }}
+                  {{ isPastDeadline(pkg._deadline) ? 'Expired — visible as Closed' : `Closes ${formatDeadline(pkg._deadline)}` }}
                 </span>
               </td>
 
@@ -329,12 +329,12 @@ export default {
       })
     },
     isPackagePublic(pkg) {
-      if (!pkg || !pkg._isActive || this.isPastDeadline(pkg._deadline)) return false
+      if (!pkg || !pkg._isActive) return false
       return !pkg._isSpecial || pkg._specialPrice !== ''
     },
     packageVisibilityLabel(pkg) {
       if (!pkg || !pkg._isActive || (pkg._isSpecial && pkg._specialPrice === '')) return 'Hidden from users'
-      if (this.isPastDeadline(pkg._deadline)) return 'Deadline passed — hidden'
+      if (this.isPastDeadline(pkg._deadline)) return 'Visible as closed'
       return 'Visible to users'
     },
     async fetchPackages() {
@@ -410,12 +410,6 @@ export default {
     },
     async onActiveChange(pkg) {
       const previousActive = pkg.isActive !== false
-      if (pkg._isActive && this.isPastDeadline(pkg._deadline)) {
-        this.saveError = 'Packages with past deadlines cannot be activated. Set a future deadline first.'
-        pkg._isActive = previousActive
-        return
-      }
-
       // Treat the toggle as publishing the row's current state. This ensures
       // staged price, deadline, betslip, and photo changes go live together.
       pkg._dirty = true
@@ -431,10 +425,6 @@ export default {
     },
     async savePackage(pkg) {
       this.saveError = ''
-      if (pkg._isActive && this.isPastDeadline(pkg._deadline)) {
-        this.saveError = 'Packages with past deadlines cannot be activated. Set a future deadline first.'
-        return
-      }
       pkg._saving   = true
       try {
         const hasPhoto = !!this.pkgPhotoFiles[pkg.id]
