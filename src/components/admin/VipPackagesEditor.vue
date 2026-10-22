@@ -28,7 +28,7 @@
             <tr
               v-for="pkg in packages"
               :key="pkg.id"
-              :class="{ 'row-inactive': !pkg.isActive }"
+              :class="{ 'row-inactive': !pkg._isActive }"
             >
               <!-- Name -->
               <td class="td-name">
@@ -56,7 +56,7 @@
               <!-- Active toggle -->
               <td class="td-center">
                 <label class="toggle">
-                  <input type="checkbox" v-model="pkg._isActive" @change="onActiveChange(pkg)" />
+                  <input type="checkbox" v-model="pkg._isActive" :disabled="pkg._saving" @change="onActiveChange(pkg)" />
                   <span class="toggle-track"></span>
                 </label>
               </td>
@@ -158,7 +158,7 @@
           <div class="special-field special-toggle-field">
             <label>Active</label>
             <label class="toggle">
-              <input type="checkbox" v-model="specialPackage._isActive" @change="onActiveChange(specialPackage)" />
+              <input type="checkbox" v-model="specialPackage._isActive" :disabled="specialPackage._saving" @change="onActiveChange(specialPackage)" />
               <span class="toggle-track"></span>
             </label>
           </div>
@@ -397,14 +397,26 @@ export default {
       pkg._clearPhoto = true
       pkg._dirty      = true
     },
-    onActiveChange(pkg) {
+    async onActiveChange(pkg) {
+      const previousActive = pkg.isActive !== false
       if (pkg._isActive && this.isPastDeadline(pkg._deadline)) {
         this.saveError = 'Packages with past deadlines cannot be activated. Set a future deadline first.'
-        pkg._isActive = false
+        pkg._isActive = previousActive
         return
       }
-      this.saveError = ''
+
+      // Treat the toggle as publishing the row's current state. This ensures
+      // staged price, deadline, betslip, and photo changes go live together.
       pkg._dirty = true
+      await this.savePackage(pkg)
+      if (pkg._dirty) pkg._isActive = previousActive
+    },
+    notifyPackagesChanged() {
+      if (typeof window === 'undefined') return
+      window.dispatchEvent(new CustomEvent('packages-updated'))
+      try {
+        window.localStorage.setItem('almax-packages-updated', String(Date.now()))
+      } catch { /* storage can be unavailable in private browsing */ }
     },
     async savePackage(pkg) {
       this.saveError = ''
@@ -481,8 +493,12 @@ export default {
         pkg._photoUrl     = data.photoUrl     || ''
         pkg._clearPhoto   = false
         pkg._dirty        = false
+        this.notifyPackagesChanged()
       } catch (err) {
-        this.saveError = err.response?.data?.error || err.response?.data?.message || 'Save failed'
+        this.saveError = err.response?.data?.errors?.subscription_deadline?.[0]
+          || err.response?.data?.error
+          || err.response?.data?.message
+          || 'Save failed'
       } finally {
         pkg._saving = false
       }
@@ -490,6 +506,7 @@ export default {
 
     async deletePackage(pkg) {
       if (!confirm(`Delete "${pkg.name}"?\n\nThis will permanently remove this package and ALL associated subscriptions including any pending payments.\n\nThis cannot be undone.`)) return
+      pkg._deleting = true
       try {
         await adminApi.delete('/api/groups/' + pkg.id)
         if (pkg._isSpecial) {
@@ -497,6 +514,7 @@ export default {
         } else {
           this.packages = this.packages.filter(p => p.id !== pkg.id)
         }
+        this.notifyPackagesChanged()
       } catch (err) {
         this.saveError = err.response?.data?.message || err.response?.data?.error || 'Delete failed'
         this.showNotice('error', this.saveError)
@@ -532,6 +550,7 @@ export default {
           _saving:       false,
           _deleting:     false
         })
+        this.notifyPackagesChanged()
         this.newPkg = { name: '', oddsType: '2', planType: 'weekly', price: 5000, photoFile: null }
       } catch (err) {
         this.addError = err.response?.data?.message || err.response?.data?.error || 'Failed to add package'

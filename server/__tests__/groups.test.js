@@ -123,6 +123,20 @@ describe('GET /api/groups — public', () => {
     await global.__groupTestPool.query(`UPDATE groups SET is_active = true WHERE name = 'Daily Odd 5'`)
   })
 
+  test('hides active packages after their subscription deadline', async () => {
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = true, subscription_deadline = '2000-01-01T12:00' WHERE name = 'Daily Odd 5'`
+    )
+
+    const res = await request.get('/api/groups')
+    expect(res.status).toBe(200)
+    expect(res.body.map(g => g.name)).not.toContain('Daily Odd 5')
+
+    await global.__groupTestPool.query(
+      `UPDATE groups SET subscription_deadline = NULL WHERE name = 'Daily Odd 5'`
+    )
+  })
+
   test('hides Special Odds when special_price is null', async () => {
     // Ensure special group has no price
     await global.__groupTestPool.query(`UPDATE groups SET special_price = null, is_active = false WHERE name = 'Special Odds'`)

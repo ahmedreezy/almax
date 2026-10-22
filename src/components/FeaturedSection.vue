@@ -736,6 +736,7 @@ export default {
     visibleGroups() {
       const active = this.groups.filter(g => {
         if (!g.isActive) return false
+        if (g.isClosed) return false
         if (g.isSpecial) return g.specialPrice != null
         return true
       })
@@ -767,28 +768,43 @@ export default {
     await Promise.all([this.fetchTips(), this.fetchVipConfig(), this.fetchGroups(), this.fetchMagicQuestion()])
     if (isLoggedIn()) this.fetchUserActiveSub()
     this._pollInterval = setInterval(this.fetchTips, 30000)
-    this._onVisible = () => { if (!document.hidden) this.fetchTips() }
+    this._groupPollInterval = setInterval(() => this.fetchGroups({ silent: true }), 30000)
+    this._onVisible = () => {
+      if (!document.hidden) {
+        this.fetchTips()
+        this.fetchGroups({ silent: true })
+      }
+    }
     document.addEventListener('visibilitychange', this._onVisible)
     this._onLogout  = () => this.handleForcedLogout()
     this._onLogin = (event) => this.handleUserLogin(event)
     this._onSubscriptionUpdated = () => this.handleSubscriptionUpdated()
+    this._onPackagesUpdated = () => this.fetchGroups({ silent: true })
+    this._onPackageStorageUpdated = (event) => {
+      if (event.key === 'almax-packages-updated') this.fetchGroups({ silent: true })
+    }
     this._onKeyDown = (e) => { if (e.key === 'Escape' && this.showVipMenu) this.closeVip() }
     // "View My Subscriptions" buttons dispatch this to open the account-scoped view.
     this._openStatus = () => this.openMySubscriptions()
     window.addEventListener('user-logged-out', this._onLogout)
     window.addEventListener('user-logged-in', this._onLogin)
     window.addEventListener('user-subscription-updated', this._onSubscriptionUpdated)
+    window.addEventListener('packages-updated', this._onPackagesUpdated)
+    window.addEventListener('storage', this._onPackageStorageUpdated)
     document.addEventListener('keydown', this._onKeyDown)
     document.addEventListener('open-vip-status', this._openStatus)
   },
   beforeUnmount() {
     clearInterval(this._pollInterval)
+    clearInterval(this._groupPollInterval)
     clearInterval(this._payPollInterval)
     clearInterval(this._pollCountdownInterval)
     document.removeEventListener('visibilitychange', this._onVisible)
     window.removeEventListener('user-logged-out', this._onLogout)
     window.removeEventListener('user-logged-in', this._onLogin)
     window.removeEventListener('user-subscription-updated', this._onSubscriptionUpdated)
+    window.removeEventListener('packages-updated', this._onPackagesUpdated)
+    window.removeEventListener('storage', this._onPackageStorageUpdated)
     document.removeEventListener('keydown', this._onKeyDown)
     document.removeEventListener('open-vip-status', this._openStatus)
   },
@@ -895,9 +911,11 @@ export default {
         if (data) this.vipCfg = { ...this.vipCfg, ...data }
       } catch { /* use defaults */ }
     },
-    async fetchGroups() {
-      this.groupsLoading = true
-      this.groupsError = ''
+    async fetchGroups({ silent = false } = {}) {
+      if (!silent) {
+        this.groupsLoading = true
+        this.groupsError = ''
+      }
       try {
         const { data } = await axios.get('/api/groups')
         // Normalize: handle both snake_case (Laravel) and camelCase (Node.js)
@@ -921,9 +939,9 @@ export default {
           }
         })
       } catch {
-        this.groupsError = 'Could not load packages. Please refresh and try again.'
+        if (!silent) this.groupsError = 'Could not load packages. Please refresh and try again.'
       } finally {
-        this.groupsLoading = false
+        if (!silent) this.groupsLoading = false
       }
     },
     handleForcedLogout() {
