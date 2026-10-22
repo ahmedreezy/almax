@@ -56,8 +56,8 @@
         <div class="today-date-badge">{{ todayFormatted }}</div>
       </div>
 
-      <div class="picks-grid">
-        <div v-for="pick in todayPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
+      <div v-if="displayedPicks.length" class="picks-grid">
+        <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
           <!-- Full-width image -->
           <div class="pick-img-bar">
             <img v-if="pick.imageUrl || pick.image_url" :src="pick.imageUrl || pick.image_url" :alt="pick.caption || 'prediction'" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(pick.imageUrl || pick.image_url)" />
@@ -94,6 +94,10 @@
             </div>
           </div>
         </div>
+      </div>
+      <div v-else class="picks-empty-state">
+        <p>No active prediction packages are available right now.</p>
+        <button class="pick-vip-btn" @click="openVipMenu()">👑 View Active Packages</button>
       </div>
 
       <!-- Goalpost cartoon accent -->
@@ -727,6 +731,9 @@ export default {
         if (s.groupId != null) ids.add(Number(s.groupId))
       })
       return ids
+    },
+    displayedPicks() {
+      return this.todayPicks.filter(pick => !pick.groupId || this.isPickPackageAvailable(pick))
     },
     pollCountdown() {
       const m = Math.floor(this.pollSecondsLeft / 60)
@@ -1437,6 +1444,19 @@ export default {
   gap: 20px;
   margin-bottom: 32px;
 }
+.picks-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  margin-bottom: 32px;
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 16px;
+  background: rgba(255,215,0,0.05);
+  color: var(--text-muted);
+}
+.picks-empty-state .pick-vip-btn { flex-shrink: 0; }
 
 @keyframes hotDeal {
   0%, 100% { border-color: rgba(255,255,255,0.07); box-shadow: none; }
