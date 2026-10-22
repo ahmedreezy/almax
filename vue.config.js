@@ -4,7 +4,11 @@ const path = require('path')
 const packageInfo = require('./package.json')
 
 const versionManifestPath = path.resolve(__dirname, 'public/version.json')
-let versionManifest = { version: packageInfo.version, buildId: `${packageInfo.version}-development` }
+let versionManifest = {
+  version: packageInfo.version,
+  buildId: `${packageInfo.version}-development`,
+  builtAt: ''
+}
 if (fs.existsSync(versionManifestPath)) {
   try {
     versionManifest = JSON.parse(fs.readFileSync(versionManifestPath, 'utf8'))
@@ -13,6 +17,7 @@ if (fs.existsSync(versionManifestPath)) {
 
 process.env.VUE_APP_VERSION = packageInfo.version
 process.env.VUE_APP_BUILD_ID = versionManifest.buildId
+process.env.VUE_APP_BUILT_AT = versionManifest.builtAt || ''
 
 module.exports = defineConfig({
   transpileDependencies: true,

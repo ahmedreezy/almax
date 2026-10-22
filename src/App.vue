@@ -49,6 +49,7 @@
 import './assets/styles/global.css'
 import UserProfile from './components/UserProfile.vue'
 import PhotoLightbox from './components/PhotoLightbox.vue'
+const { evaluateAppUpdate } = require('./utils/updateVersion')
 export default {
   name: 'App',
   components: { UserProfile, PhotoLightbox },
@@ -64,6 +65,7 @@ export default {
       latestVersion: '',
       currentVersion: process.env.VUE_APP_VERSION || '',
       currentBuildId: process.env.VUE_APP_BUILD_ID || '',
+      currentBuiltAt: process.env.VUE_APP_BUILT_AT || '',
       themeOptions: [
         { value: 'light',  icon: '☀️', label: 'Light'  },
         { value: 'dark',   icon: '🌙', label: 'Dark'   },
@@ -125,16 +127,24 @@ export default {
         })
         if (!response.ok) return
         const manifest = await response.json()
-        const buildChanged = Boolean(manifest.buildId && this.currentBuildId && manifest.buildId !== this.currentBuildId)
-        const versionChanged = Boolean(manifest.version && this.currentVersion && manifest.version !== this.currentVersion)
-        if (buildChanged || versionChanged) {
+        const updateAvailable = evaluateAppUpdate({
+          buildId: this.currentBuildId,
+          version: this.currentVersion,
+          builtAt: this.currentBuiltAt
+        }, manifest)
+        if (updateAvailable) {
           this.latestBuildId = manifest.buildId || manifest.version
           this.latestVersion = manifest.version || ''
           this.updateAvailable = true
+        } else {
+          this.latestBuildId = ''
+          this.latestVersion = ''
+          this.updateAvailable = false
         }
       } catch { /* Update checks should never interrupt the application. */ }
     },
     applyUpdate() {
+      this.updateAvailable = false
       const url = new URL(window.location.href)
       url.searchParams.set('_appv', this.latestBuildId || this.latestVersion || Date.now().toString())
       window.location.replace(url.toString())
