@@ -100,6 +100,7 @@
             <div class="kpi-card">
               <p class="kpi-label">Today's Revenue</p>
               <p class="kpi-value kpi-value--md">{{ formatUGX(f.revenue_today) }}</p>
+              <p class="kpi-sub">{{ formatNum(f.today?.confirmed_count) }} confirmed · {{ f.today?.timezone || 'Africa/Kampala' }}</p>
             </div>
             <div class="kpi-card">
               <p class="kpi-label">Total Users</p>
@@ -115,6 +116,14 @@
               <p class="kpi-value kpi-value--md">{{ formatNum(analytics.payments.pending_count) }}</p>
               <p class="kpi-sub">Awaiting confirmation</p>
             </div>
+          </div>
+
+          <div class="finance-reconcile" :class="auditHealthy ? 'finance-reconcile--ok' : 'finance-reconcile--warn'">
+            <span>Today: <strong>{{ formatNum(f.today?.attempted_count) }} attempts</strong> ({{ formatUGX(f.today?.attempted_amount) }})</span>
+            <span>Failed today: <strong>{{ formatNum(f.today?.failed_count) }}</strong> ({{ formatUGX(f.today?.failed_amount) }})</span>
+            <span>Ledger rows: <strong>{{ formatNum(a.ledger_count) }}</strong></span>
+            <span>Audit: <strong>{{ auditHealthy ? 'Reconciled' : 'Needs review' }}</strong></span>
+            <span>As of: <strong>{{ fmtDateTime(a.as_of) }}</strong></span>
           </div>
 
           <!-- Charts row -->
@@ -199,11 +208,37 @@
             </div>
           </div>
 
+          <div class="kpi-grid" style="margin-top:14px">
+            <div class="kpi-card kpi-green">
+              <p class="kpi-label">Confirmed Today</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(f.today?.confirmed_amount) }}</p>
+              <p class="kpi-sub">{{ formatNum(f.today?.confirmed_count) }} confirmations · Kampala time</p>
+            </div>
+            <div class="kpi-card kpi-blue">
+              <p class="kpi-label">Attempts Today</p>
+              <p class="kpi-value kpi-value--md">{{ formatNum(f.today?.attempted_count) }}</p>
+              <p class="kpi-sub">{{ formatUGX(f.today?.attempted_amount) }} attempted</p>
+            </div>
+            <div class="kpi-card kpi-red">
+              <p class="kpi-label">Failed Today</p>
+              <p class="kpi-value kpi-value--md">{{ formatNum(f.today?.failed_count) }}</p>
+              <p class="kpi-sub">{{ formatUGX(f.today?.failed_amount) }} not collected</p>
+            </div>
+            <div class="kpi-card" :class="auditHealthy ? 'kpi-green' : 'kpi-warn'">
+              <p class="kpi-label">Ledger Audit</p>
+              <p class="kpi-value kpi-value--md">{{ auditHealthy ? 'Reconciled' : 'Review' }}</p>
+              <p class="kpi-sub">{{ formatNum(a.ledger_count) }} preserved payment rows</p>
+            </div>
+          </div>
+
           <div class="finance-reconcile" :class="Number(f.reconciliation_difference || 0) === 0 ? 'finance-reconcile--ok' : 'finance-reconcile--warn'">
             <span>This month: <strong>{{ formatUGX(f.revenue_this_month) }}</strong></span>
             <span>This week: <strong>{{ formatUGX(f.revenue_this_week) }}</strong></span>
             <span>Unclassified: <strong>{{ formatUGX(f.unclassified_amount) }}</strong> ({{ formatNum(f.unclassified_count) }})</span>
             <span>Ledger difference: <strong>{{ formatUGX(f.reconciliation_difference) }}</strong></span>
+            <span>Missing confirmation time: <strong>{{ formatNum(a.confirmed_missing_timestamp_count) }}</strong></span>
+            <span>Confirmed without transaction ID: <strong>{{ formatNum(a.confirmed_missing_transaction_count) }}</strong></span>
+            <span>Preserved after subscription deletion: <strong>{{ formatNum(a.preserved_without_subscription_count) }}</strong></span>
           </div>
 
           <div class="two-col-grid" style="margin-top:24px">
@@ -259,6 +294,43 @@
               </div>
             </div>
             <p v-else class="chart-empty">No confirmed revenue in the last 30 days</p>
+          </div>
+
+          <div class="section-card" style="margin-top:24px">
+            <p class="section-card-title">Recent Payment Ledger</p>
+            <p class="section-card-sub">Confirmation time drives revenue. Attempt time is shown separately. Phone numbers are masked.</p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Attempted</th>
+                    <th>Confirmed / Failed</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Phone</th>
+                    <th>Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in f.recent_payments" :key="row.id">
+                    <td class="td-muted">{{ row.id }}</td>
+                    <td class="td-date">{{ fmtDateTime(row.created_at) }}</td>
+                    <td class="td-date">{{ fmtDateTime(row.confirmed_at || row.failed_at) }}</td>
+                    <td><span :class="['status-badge', paymentStatusClass(row.status)]">{{ capitalize(row.status) }}</span></td>
+                    <td class="td-amount">{{ formatUGX(row.amount) }}</td>
+                    <td class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
+                    <td class="td-muted">{{ row.phone || '—' }}</td>
+                    <td class="td-muted"><code>{{ row.payment_reference || row.transaction_id || '—' }}</code></td>
+                  </tr>
+                  <tr v-if="!f.recent_payments || !f.recent_payments.length">
+                    <td colspan="8" class="td-empty">No payment ledger rows are available.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="ledger-note">Ledger deletion protection started on 22 Oct 2026. Records deleted before that cutover cannot be reconstructed from the current database.</p>
           </div>
         </div>
 
@@ -790,7 +862,7 @@ export default {
         {
           id: 'commission',
           label: 'Commission',
-          desc: '10% platform cut',
+          desc: 'Platform transfer tracking',
           icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
         },
         {
@@ -819,7 +891,13 @@ export default {
       return this.navItems.find(n => n.id === this.activeSection) || {}
     },
     f() { return this.analytics?.finance || {} },
+    a() { return this.analytics?.finance?.audit || {} },
     c() { return this.analytics?.commission || {} },
+    auditHealthy() {
+      return Number(this.a.status_count_difference || 0) === 0
+        && Number(this.a.status_amount_difference || 0) === 0
+        && Number(this.a.confirmed_missing_timestamp_count || 0) === 0
+    },
     currentCommission() {
       const available = this.c.available ?? this.c.current_total
       if (available !== undefined && available !== null) return Number(available) || 0
@@ -947,6 +1025,12 @@ export default {
       if (!d) return '—'
       return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
     },
+    fmtDateTime(d) {
+      if (!d) return '—'
+      return new Date(d).toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit'
+      })
+    },
     capitalize(s) {
       if (!s) return '—'
       return s.charAt(0).toUpperCase() + s.slice(1)
@@ -959,6 +1043,14 @@ export default {
         failed:     'st-fail'
       }
       return map[status] || 'st-none'
+    },
+    paymentStatusClass(status) {
+      const map = {
+        confirmed: 'st-done',
+        pending: 'st-pend',
+        failed: 'st-fail'
+      }
+      return map[String(status || '').toLowerCase()] || 'st-none'
     },
     statusLabel(status) {
       const map = {
@@ -1859,6 +1951,15 @@ export default {
 .td-commission { font-weight: 800; color: #f59e0b; text-align: right; }
 .td-action  { text-align: right; white-space: nowrap; }
 .td-empty   { text-align: center; color: #374151; padding: 24px; font-size: 12px; }
+
+.ledger-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #1a2540;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.5;
+}
 
 code {
   background: #1a2540;
