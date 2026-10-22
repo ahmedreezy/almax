@@ -73,9 +73,10 @@ function formatGroup(g) {
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM groups ORDER BY price ASC')
-    // Hide: inactive regular groups, and special groups that aren't priced today
+    // Hide inactive/expired groups, and special groups that aren't priced today.
     const visible = rows.filter(g => {
       if (!g.is_active) return false
+      if (isDeadlineClosed(g.subscription_deadline)) return false
       if (g.is_special) return g.special_price != null
       return true
     })
