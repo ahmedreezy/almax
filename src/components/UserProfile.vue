@@ -10,6 +10,7 @@
     <div v-else class="up-avatar-wrap">
       <button class="up-avatar-btn" @click="toggleDropdown" :aria-expanded="showDropdown">
         <span class="up-avatar-char">{{ user.username.charAt(0).toUpperCase() }}</span>
+        <span v-if="unreadCount" class="up-alert-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
       </button>
 
       <transition name="up-drop">
@@ -22,13 +23,19 @@
             </div>
           </div>
           <div class="up-dd-divider"></div>
+          <div v-if="recoveryNotice" class="up-recovery-alert">
+            <strong>🎟 {{ recoveryNotice.title }}</strong>
+            <span>{{ recoveryNotice.message }}</span>
+            <button @click="viewRecovery">View recovery ticket</button>
+          </div>
+          <div v-if="recoveryNotice" class="up-dd-divider"></div>
           <div class="up-dd-status">
             <span v-if="loadingStatus" class="up-status-loading">Checking…</span>
             <span v-else-if="activeSub" class="up-status-active">✅ {{ subLabel }}</span>
             <span v-else class="up-status-none">No active subscription</span>
           </div>
           <div class="up-dd-divider"></div>
-          <button v-if="activeSub" class="up-view-subs-btn" @click="viewSubscriptions">📋 View My Subscriptions</button>
+          <button class="up-view-subs-btn" @click="viewSubscriptions">📋 View My Subscriptions</button>
           <button class="up-logout-btn" @click="logout">Log out</button>
         </div>
       </transition>
@@ -130,6 +137,8 @@ export default {
       authLoading: false,
       activeSub: null,
       loadingStatus: false,
+      unreadCount: 0,
+      recoveryNotice: null,
       showRegPw: false,
       showConfirmPw: false,
       showLoginPw: false,
@@ -150,14 +159,16 @@ export default {
   },
   mounted() {
     this.user = getUser()
-    if (this.user) this.fetchStatus()
+    if (this.user) Promise.all([this.fetchStatus(), this.fetchNotifications()])
     window.addEventListener('user-auth-changed', this.handleAuthChanged)
+    window.addEventListener('open-user-auth', this.openAuth)
     window.addEventListener('user-subscription-updated', this.handleSubscriptionUpdated)
     document.addEventListener('click', this.handleOutsideClick)
     document.addEventListener('keydown', this.handleKeyDown)
   },
   beforeUnmount() {
     window.removeEventListener('user-auth-changed', this.handleAuthChanged)
+    window.removeEventListener('open-user-auth', this.openAuth)
     window.removeEventListener('user-subscription-updated', this.handleSubscriptionUpdated)
     document.removeEventListener('click', this.handleOutsideClick)
     document.removeEventListener('keydown', this.handleKeyDown)
@@ -204,16 +215,18 @@ export default {
       const user = event.detail?.user || getUser()
       this.user = user
       this.activeSub = null
+      this.unreadCount = 0
+      this.recoveryNotice = null
       this.showDropdown = false
-      if (user) this.fetchStatus()
+      if (user) Promise.all([this.fetchStatus(), this.fetchNotifications()])
     },
     handleSubscriptionUpdated() {
       this.user = getUser()
-      if (this.user) this.fetchStatus()
+      if (this.user) Promise.all([this.fetchStatus(), this.fetchNotifications()])
     },
     toggleDropdown() {
       this.showDropdown = !this.showDropdown
-      if (this.showDropdown && !this.activeSub) this.fetchStatus()
+      if (this.showDropdown) Promise.all([this.fetchStatus(), this.fetchNotifications()])
     },
     openAuth() {
       this.authError = ''
@@ -291,7 +304,7 @@ export default {
       if (!this.user) return
       this.loadingStatus = true
       try {
-        const { data } = await axios.get('/api/subscriptions/user/' + this.user.id)
+        const { data } = await axios.get('/api/subscriptions/me')
         this.activeSub = Array.isArray(data) ? (data.find(s => s.status === 'active') || null) : null
       } catch {
         this.activeSub = null
@@ -299,16 +312,40 @@ export default {
         this.loadingStatus = false
       }
     },
+    async fetchNotifications() {
+      if (!this.user) return
+      try {
+        const { data } = await axios.get('/api/user-notifications')
+        this.unreadCount = Number(data.unreadCount || 0)
+        this.recoveryNotice = (data.notifications || []).find(item => item.type === 'recovery_ticket' && !item.read_at) || null
+      } catch {
+        this.unreadCount = 0
+        this.recoveryNotice = null
+      }
+    },
     logout() {
       clearUser()
       this.user = null
       this.activeSub = null
+      this.unreadCount = 0
+      this.recoveryNotice = null
       this.showDropdown = false
       this.$emit('logged-out')
     },
     viewSubscriptions() {
       this.showDropdown = false
       document.dispatchEvent(new CustomEvent('open-vip-status'))
+    },
+    async viewRecovery() {
+      const notification = this.recoveryNotice
+      this.showDropdown = false
+      document.dispatchEvent(new CustomEvent('open-vip-status'))
+      if (!notification) return
+      try {
+        await axios.patch(`/api/user-notifications/${notification.id}/read`)
+        this.unreadCount = Math.max(0, this.unreadCount - 1)
+        this.recoveryNotice = null
+      } catch { /* The ticket remains available even if read-state update fails. */ }
     }
   }
 }
@@ -334,6 +371,7 @@ export default {
   background: linear-gradient(135deg, var(--gold-dark, #b8860b), var(--gold, #ffd700));
   border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
+.up-alert-badge { position:absolute; top:-5px; right:-6px; min-width:17px; height:17px; border-radius:9px; padding:0 4px; display:flex; align-items:center; justify-content:center; background:#ff4d4d; color:#fff; border:2px solid #151515; font-size:9px; font-weight:900; }
 .up-avatar-char { font-weight: 900; font-size: 14px; color: #0a0a0a; }
 
 /* Dropdown */
@@ -352,6 +390,10 @@ export default {
 .up-status-active { color: #4caf50; font-weight: 700; }
 .up-status-none { color: var(--text-muted, #aaa); }
 .up-status-loading { color: var(--text-muted, #aaa); font-style: italic; }
+.up-recovery-alert { display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid rgba(255,215,0,.22); border-radius:9px; background:rgba(255,215,0,.07); }
+.up-recovery-alert strong { color:#ffd700; font-size:12px; }
+.up-recovery-alert span { color:rgba(255,255,255,.65); font-size:11px; line-height:1.4; }
+.up-recovery-alert button { border:0; border-radius:7px; padding:7px 8px; background:#ffd700; color:#111; font-size:11px; font-weight:900; cursor:pointer; }
 .up-logout-btn { width: 100%; background: rgba(255,80,80,0.12); border: 1px solid rgba(255,80,80,0.25); border-radius: 8px; color: #ff6b6b; font-size: 13px; font-weight: 700; padding: 8px; cursor: pointer; transition: background 0.2s; }
 .up-logout-btn:hover { background: rgba(255,80,80,0.22); }
 .up-view-subs-btn { width: 100%; background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.2); border-radius: 8px; color: #FFD700; font-size: 13px; font-weight: 700; padding: 8px 10px; cursor: pointer; text-align: left; transition: background 0.18s; margin-bottom: 8px; }

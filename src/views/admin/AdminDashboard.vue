@@ -84,6 +84,7 @@
         <PaymentsOverview    v-if="activeSection === 'payments'" :focusSubscriptionId="focusSubId" @vue:unmounted="focusSubId = null" />
         <TestimonialsEditor  v-if="activeSection === 'testimonials'" />
         <UsersEditor         v-if="activeSection === 'users'" />
+        <SupportInbox        v-if="activeSection === 'support'" />
         <SitePreview         v-if="activeSection === 'preview'" />
       </div>
     </main>
@@ -99,11 +100,12 @@ import VipPackagesEditor   from '../../components/admin/VipPackagesEditor.vue'
 import PaymentsOverview    from '../../components/admin/PaymentsOverview.vue'
 import TestimonialsEditor  from '../../components/admin/TestimonialsEditor.vue'
 import UsersEditor         from '../../components/admin/UsersEditor.vue'
+import SupportInbox        from '../../components/admin/SupportInbox.vue'
 import SitePreview         from '../../components/admin/SitePreview.vue'
 
 export default {
   name: 'AdminDashboard',
-  components: { FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, TestimonialsEditor, UsersEditor, SitePreview },
+  components: { FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, TestimonialsEditor, UsersEditor, SupportInbox, SitePreview },
   directives: {
     'click-outside': {
       mounted(el, binding) {
@@ -125,6 +127,7 @@ export default {
         { id: 'vip-packages',  label: 'VIP Packages',       desc: 'Pricing and betslips' },
         { id: 'payments',      label: 'Payments',           desc: 'Subscriptions and revenue' },
         { id: 'users',         label: 'Members',            desc: 'Registered accounts' },
+        { id: 'support',       label: 'Customer Chats',     desc: 'AI conversations and takeover' },
         { id: 'testimonials',  label: 'Testimonials',       desc: 'Social proof content' },
         { id: 'preview',       label: 'Site Preview',       desc: 'Public site view' }
       ],
@@ -135,6 +138,7 @@ export default {
         'vip-packages':  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
         'payments':      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
         'users':         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+        'support':       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/><path d="M8 9h8M8 13h5"/></svg>',
         'testimonials':  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
         'preview':       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>'
       },

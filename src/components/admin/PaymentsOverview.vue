@@ -34,13 +34,13 @@
       <div v-if="reportError" class="error-msg" style="padding:8px 0">{{ reportError }}</div>
       <div v-else class="report-grid">
         <div class="report-card">
-          <div class="report-label">Total Payments</div>
+          <div class="report-label">Attempts Submitted</div>
           <div class="report-value">{{ report.summary.totalPayments }}</div>
         </div>
         <div class="report-card report-card--green">
-          <div class="report-label">Money Received</div>
-          <div class="report-value">{{ Number(reportStatusAmount('confirmed') || 0).toLocaleString() }} UGX</div>
-          <div class="report-sub">{{ reportStatusCount('confirmed') }} confirmed</div>
+          <div class="report-label">Money Confirmed</div>
+          <div class="report-value">{{ Number(report.summary.confirmedAmount || 0).toLocaleString() }} UGX</div>
+          <div class="report-sub">{{ report.summary.confirmedPayments || 0 }} confirmed in this period</div>
         </div>
         <div class="report-card">
           <div class="report-label">Pending</div>
@@ -50,7 +50,7 @@
           </div>
         </div>
         <div class="report-card">
-          <div class="report-label">Total Volume</div>
+          <div class="report-label">Attempted Volume</div>
           <div class="report-value report-value--muted">{{ Number(report.summary.totalAmount || 0).toLocaleString() }} UGX</div>
         </div>
       </div>
@@ -308,7 +308,7 @@ export default {
       },
       activePreset: 'all',
       report: {
-        summary: { totalPayments: 0, totalAmount: 0 },
+        summary: { totalPayments: 0, totalAmount: 0, confirmedPayments: 0, confirmedAmount: 0 },
         byStatus: [],
         byMethod: [],
         byPlan: []
@@ -372,7 +372,7 @@ export default {
 
         const { data } = await adminApi.get('/api/payments/report', { params })
         this.report = {
-          summary: data.summary || { totalPayments: 0, totalAmount: 0 },
+          summary: data.summary || { totalPayments: 0, totalAmount: 0, confirmedPayments: 0, confirmedAmount: 0 },
           byStatus: data.byStatus || [],
           byMethod: data.byMethod || [],
           byPlan: data.byPlan || []

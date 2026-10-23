@@ -18,15 +18,23 @@ echo " Vue publish to Laravel public: $(date)"
 echo "=========================================="
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$APP_DIR"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/almax-frontend.XXXXXX")"
+trap 'rm -rf "$BUILD_DIR"' EXIT
 
-echo "[1/5] Installing Node dependencies..."
+echo "[1/5] Preparing isolated build workspace..."
+tar \
+  --exclude='./.git' \
+  --exclude='./node_modules' \
+  --exclude='./dist' \
+  --exclude='./deploy.log' \
+  -C "$APP_DIR" -cf - . | tar -C "$BUILD_DIR" -xf -
+
+echo "[2/5] Installing dependencies and building production assets..."
+cd "$BUILD_DIR"
 npm ci
-
-echo "[2/5] Building production assets..."
 npm run build
 
-DIST_DIR="$APP_DIR/dist"
+DIST_DIR="$BUILD_DIR/dist"
 if [[ ! -f "$DIST_DIR/index.html" ]]; then
   echo "[error] Build did not produce dist/index.html"
   exit 1

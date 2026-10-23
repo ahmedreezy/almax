@@ -28,7 +28,7 @@
             <tr
               v-for="pkg in packages"
               :key="pkg.id"
-              :class="{ 'row-inactive': !pkg.isActive }"
+              :class="{ 'row-inactive': !pkg._isActive }"
             >
               <!-- Name -->
               <td class="td-name">
@@ -56,7 +56,7 @@
               <!-- Active toggle -->
               <td class="td-center">
                 <label class="toggle">
-                  <input type="checkbox" v-model="pkg._isActive" @change="onActiveChange(pkg)" />
+                  <input type="checkbox" v-model="pkg._isActive" :disabled="pkg._saving" @change="onActiveChange(pkg)" />
                   <span class="toggle-track"></span>
                 </label>
               </td>
@@ -70,7 +70,9 @@
                   @change="pkg._dirty = true"
                   title="Block new subscriptions after this date and time (leave blank for no deadline)"
                 />
-                <span v-if="pkg._deadline" class="field-hint">Closes {{ formatDeadline(pkg._deadline) }}</span>
+                <span v-if="pkg._deadline" :class="['field-hint', { 'field-hint--expired': isPastDeadline(pkg._deadline) }]">
+                  {{ isPastDeadline(pkg._deadline) ? 'Expired — visible as Closed' : `Closes ${formatDeadline(pkg._deadline)}` }}
+                </span>
               </td>
 
               <!-- Betslip link -->
@@ -137,8 +139,8 @@
             <span class="panel-kicker">Special Odds</span>
             <h3>Daily Special Offer</h3>
           </div>
-          <span :class="['special-status', specialPackage && specialPackage._isActive && specialPackage._specialPrice !== '' ? 'is-live' : 'is-hidden']">
-            {{ specialPackage && specialPackage._isActive && specialPackage._specialPrice !== '' ? 'Visible to users' : 'Hidden from users' }}
+          <span :class="['special-status', isPackagePublic(specialPackage) ? 'is-live' : 'is-hidden']">
+            {{ packageVisibilityLabel(specialPackage) }}
           </span>
         </div>
 
@@ -158,7 +160,7 @@
           <div class="special-field special-toggle-field">
             <label>Active</label>
             <label class="toggle">
-              <input type="checkbox" v-model="specialPackage._isActive" @change="onActiveChange(specialPackage)" />
+              <input type="checkbox" v-model="specialPackage._isActive" :disabled="specialPackage._saving" @change="onActiveChange(specialPackage)" />
               <span class="toggle-track"></span>
             </label>
           </div>
@@ -239,6 +241,8 @@
           </button>
         </form>
       </div>
+
+      <PackageReleaseManager :packages="[...packages, ...(specialPackage ? [specialPackage] : [])]" @published="fetchPackages" />
     </template>
   </div>
 </template>
@@ -246,11 +250,13 @@
 <script>
 import adminApi from '@/utils/adminApi'
 import { getApiBaseUrl } from '@/utils/apiBase'
+import PackageReleaseManager from './PackageReleaseManager.vue'
 
 const API = getApiBaseUrl()
 
 export default {
   name: 'VipPackagesEditor',
+  components: { PackageReleaseManager },
   data() {
     return {
       packages:   [],
@@ -321,6 +327,15 @@ export default {
         hour: 'numeric',
         minute: '2-digit'
       })
+    },
+    isPackagePublic(pkg) {
+      if (!pkg || !pkg._isActive) return false
+      return !pkg._isSpecial || pkg._specialPrice !== ''
+    },
+    packageVisibilityLabel(pkg) {
+      if (!pkg || !pkg._isActive || (pkg._isSpecial && pkg._specialPrice === '')) return 'Hidden from users'
+      if (this.isPastDeadline(pkg._deadline)) return 'Visible as closed'
+      return 'Visible to users'
     },
     async fetchPackages() {
       this.loading    = true
@@ -393,21 +408,23 @@ export default {
       pkg._clearPhoto = true
       pkg._dirty      = true
     },
-    onActiveChange(pkg) {
-      if (pkg._isActive && this.isPastDeadline(pkg._deadline)) {
-        this.saveError = 'Packages with past deadlines cannot be activated. Set a future deadline first.'
-        pkg._isActive = false
-        return
-      }
-      this.saveError = ''
+    async onActiveChange(pkg) {
+      const previousActive = pkg.isActive !== false
+      // Treat the toggle as publishing the row's current state. This ensures
+      // staged price, deadline, betslip, and photo changes go live together.
       pkg._dirty = true
+      await this.savePackage(pkg)
+      if (pkg._dirty) pkg._isActive = previousActive
+    },
+    notifyPackagesChanged() {
+      if (typeof window === 'undefined') return
+      window.dispatchEvent(new CustomEvent('packages-updated'))
+      try {
+        window.localStorage.setItem('almax-packages-updated', String(Date.now()))
+      } catch { /* storage can be unavailable in private browsing */ }
     },
     async savePackage(pkg) {
       this.saveError = ''
-      if (pkg._isActive && this.isPastDeadline(pkg._deadline)) {
-        this.saveError = 'Packages with past deadlines cannot be activated. Set a future deadline first.'
-        return
-      }
       pkg._saving   = true
       try {
         const hasPhoto = !!this.pkgPhotoFiles[pkg.id]
@@ -477,8 +494,12 @@ export default {
         pkg._photoUrl     = data.photoUrl     || ''
         pkg._clearPhoto   = false
         pkg._dirty        = false
+        this.notifyPackagesChanged()
       } catch (err) {
-        this.saveError = err.response?.data?.error || err.response?.data?.message || 'Save failed'
+        this.saveError = err.response?.data?.errors?.subscription_deadline?.[0]
+          || err.response?.data?.error
+          || err.response?.data?.message
+          || 'Save failed'
       } finally {
         pkg._saving = false
       }
@@ -486,6 +507,7 @@ export default {
 
     async deletePackage(pkg) {
       if (!confirm(`Delete "${pkg.name}"?\n\nThis will permanently remove this package and ALL associated subscriptions including any pending payments.\n\nThis cannot be undone.`)) return
+      pkg._deleting = true
       try {
         await adminApi.delete('/api/groups/' + pkg.id)
         if (pkg._isSpecial) {
@@ -493,6 +515,7 @@ export default {
         } else {
           this.packages = this.packages.filter(p => p.id !== pkg.id)
         }
+        this.notifyPackagesChanged()
       } catch (err) {
         this.saveError = err.response?.data?.message || err.response?.data?.error || 'Delete failed'
         this.showNotice('error', this.saveError)
@@ -528,6 +551,7 @@ export default {
           _saving:       false,
           _deleting:     false
         })
+        this.notifyPackagesChanged()
         this.newPkg = { name: '', oddsType: '2', planType: 'weekly', price: 5000, photoFile: null }
       } catch (err) {
         this.addError = err.response?.data?.message || err.response?.data?.error || 'Failed to add package'
@@ -641,6 +665,7 @@ export default {
 }
 .field-url:focus, .field-code:focus, .field-sm:focus, .field-deadline:focus { border-color: rgba(255,215,0,0.4); }
 .field-hint { display: block; font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 3px; }
+.field-hint--expired { color: #ff8a80; font-weight: 700; }
 
 /* Toggle */
 .toggle { position: relative; display: inline-flex; cursor: pointer; }

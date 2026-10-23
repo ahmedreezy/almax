@@ -56,11 +56,10 @@
         <div class="today-date-badge">{{ todayFormatted }}</div>
       </div>
 
-      <div class="picks-grid">
-        <div v-for="pick in todayPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
-          <!-- Full-width image -->
+      <div v-if="displayedPicks.length" class="picks-grid">
+        <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
           <div class="pick-img-bar">
-            <img v-if="pick.imageUrl || pick.image_url" :src="pick.imageUrl || pick.image_url" :alt="pick.caption || 'prediction'" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(pick.imageUrl || pick.image_url)" />
+            <img v-if="pick.imageUrl || pick.image_url" :src="resolvePhotoUrl(pick.imageUrl || pick.image_url)" :alt="pick.caption || 'prediction'" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(resolvePhotoUrl(pick.imageUrl || pick.image_url))" />
             <div v-else class="pick-img-placeholder">
               <svg viewBox="0 0 80 54" width="56" height="38" xmlns="http://www.w3.org/2000/svg" opacity="0.3">
                 <path d="M14,4 L2,18 L14,18 L14,50 L66,50 L66,18 L78,18 L66,4 L54,10 L48,7 L40,9 L32,7 L26,10 Z"
@@ -68,11 +67,8 @@
               </svg>
             </div>
           </div>
-          <!-- content -->
           <div class="pick-body">
-            <!-- Caption -->
             <p v-if="pick.caption" class="pick-caption">{{ pick.caption }}</p>
-            <!-- Win probability -->
             <div class="pick-prob-bar">
               <div class="pick-prob-header">
                 <span class="pick-prob-label">⚡ WIN PROB</span>
@@ -83,8 +79,8 @@
               </div>
             </div>
             <div class="pick-footer">
-              <button v-if="!pick.groupId || !subscribedGroupIds.has(Number(pick.groupId))" class="pick-vip-btn" @click="openVipMenu(pick.groupId || null)">
-                👑 Join VIP
+              <button v-if="!pick.groupId || !subscribedGroupIds.has(Number(pick.groupId))" class="pick-vip-btn" @click="openVipForPick(pick)">
+                👑 {{ isPickPackageAvailable(pick) ? 'Join VIP' : 'View Active Packages' }}
               </button>
               <template v-else>
                 <span class="pick-vip-active-tag">👑 VIP</span>
@@ -94,6 +90,10 @@
             </div>
           </div>
         </div>
+      </div>
+      <div v-else class="picks-empty-state">
+        <p>No active prediction packages are available right now.</p>
+        <button class="pick-vip-btn" @click="openVipMenu()">👑 View Active Packages</button>
       </div>
 
       <!-- Goalpost cartoon accent -->
@@ -518,7 +518,31 @@
             <p v-if="statusError" class="reg-error">{{ statusError }}</p>
             <div v-if="statusLoading" class="pkg-loading">Loading your subscriptions…</div>
 
-            <div v-else-if="activeSubs.length" class="betslip-box">
+            <div v-if="!statusLoading && recoveryTickets.length" class="recovery-list">
+              <div v-for="ticket in recoveryTickets" :key="ticket.id" class="recovery-ticket">
+                <div class="recovery-ticket-head">
+                  <div>
+                    <span class="recovery-free">Free recovery</span>
+                    <strong>{{ ticket.release?.group?.name || 'VIP package' }}</strong>
+                  </div>
+                  <span>🎟</span>
+                </div>
+                <p>A paid package did not pass, so this replacement ticket was added to your account.</p>
+                <div v-if="ticket.release?.betslip_link" class="betslip-section">
+                  <div class="betslip-label">🔗 Recovery Betslip</div>
+                  <a :href="ticket.release.betslip_link" target="_blank" rel="noopener" class="betslip-link">Open recovery ticket</a>
+                </div>
+                <div v-if="ticket.release?.betslip_code" class="betslip-section">
+                  <div class="betslip-label">🎫 Recovery Code</div>
+                  <div class="betslip-code-row">
+                    <code class="betslip-code">{{ ticket.release.betslip_code }}</code>
+                    <button class="copy-btn" @click="copyCode(ticket.release.betslip_code)">{{ copied ? '✓' : 'Copy' }}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!statusLoading && activeSubs.length" class="betslip-box">
               <div v-for="sub in activeSubs" :key="sub.id" class="status-sub-card">
                 <div v-if="sub.packagePhoto" class="sub-card-photo-wrap">
                   <img :src="resolvePhotoUrl(sub.packagePhoto)" alt="VIP Package" class="sub-card-photo" style="cursor:zoom-in" @click="$lightbox.open(resolvePhotoUrl(sub.packagePhoto))" />
@@ -556,7 +580,7 @@
                 </a>
               </div>
             </div>
-            <div v-else-if="statusChecked && !activeSubs.length" class="pending-box">
+            <div v-if="!statusLoading && statusChecked && !activeSubs.length && !recoveryTickets.length" class="pending-box">
               <p style="text-align:center; color: var(--text-muted); font-size:14px;">
                 {{ pendingStatusMsg || 'No active subscription found.' }}
               </p>
@@ -674,6 +698,7 @@ export default {
       statusChecked: false,
       activeSub: null,
       activeSubs: [],
+      recoveryTickets: [],
       pendingStatusMsg: '',
       copied: false,
       // Decorations
@@ -702,17 +727,23 @@ export default {
       })
       return ids
     },
+    displayedPicks() {
+      return this.todayPicks.filter(pick => !pick.groupId || this.isPickPackageAvailable(pick))
+    },
+    displayedPackages() {
+      return this.groups.filter(group => {
+        if (!group.isActive) return false
+        if (group.isSpecial) return group.specialPrice != null
+        return true
+      })
+    },
     pollCountdown() {
       const m = Math.floor(this.pollSecondsLeft / 60)
       const s = this.pollSecondsLeft % 60
       return m + ':' + String(s).padStart(2, '0')
     },
     visibleGroups() {
-      const active = this.groups.filter(g => {
-        if (!g.isActive) return false
-        if (g.isSpecial) return g.specialPrice != null
-        return true
-      })
+      const active = this.displayedPackages
       // If user clicked from a specific pick, show only the linked package
       if (this.linkedGroupId) {
         const lid = Number(this.linkedGroupId)
@@ -741,28 +772,43 @@ export default {
     await Promise.all([this.fetchTips(), this.fetchVipConfig(), this.fetchGroups(), this.fetchMagicQuestion()])
     if (isLoggedIn()) this.fetchUserActiveSub()
     this._pollInterval = setInterval(this.fetchTips, 30000)
-    this._onVisible = () => { if (!document.hidden) this.fetchTips() }
+    this._groupPollInterval = setInterval(() => this.fetchGroups({ silent: true }), 30000)
+    this._onVisible = () => {
+      if (!document.hidden) {
+        this.fetchTips()
+        this.fetchGroups({ silent: true })
+      }
+    }
     document.addEventListener('visibilitychange', this._onVisible)
     this._onLogout  = () => this.handleForcedLogout()
     this._onLogin = (event) => this.handleUserLogin(event)
     this._onSubscriptionUpdated = () => this.handleSubscriptionUpdated()
+    this._onPackagesUpdated = () => this.fetchGroups({ silent: true })
+    this._onPackageStorageUpdated = (event) => {
+      if (event.key === 'almax-packages-updated') this.fetchGroups({ silent: true })
+    }
     this._onKeyDown = (e) => { if (e.key === 'Escape' && this.showVipMenu) this.closeVip() }
     // "View My Subscriptions" buttons dispatch this to open the account-scoped view.
     this._openStatus = () => this.openMySubscriptions()
     window.addEventListener('user-logged-out', this._onLogout)
     window.addEventListener('user-logged-in', this._onLogin)
     window.addEventListener('user-subscription-updated', this._onSubscriptionUpdated)
+    window.addEventListener('packages-updated', this._onPackagesUpdated)
+    window.addEventListener('storage', this._onPackageStorageUpdated)
     document.addEventListener('keydown', this._onKeyDown)
     document.addEventListener('open-vip-status', this._openStatus)
   },
   beforeUnmount() {
     clearInterval(this._pollInterval)
+    clearInterval(this._groupPollInterval)
     clearInterval(this._payPollInterval)
     clearInterval(this._pollCountdownInterval)
     document.removeEventListener('visibilitychange', this._onVisible)
     window.removeEventListener('user-logged-out', this._onLogout)
     window.removeEventListener('user-logged-in', this._onLogin)
     window.removeEventListener('user-subscription-updated', this._onSubscriptionUpdated)
+    window.removeEventListener('packages-updated', this._onPackagesUpdated)
+    window.removeEventListener('storage', this._onPackageStorageUpdated)
     document.removeEventListener('keydown', this._onKeyDown)
     document.removeEventListener('open-vip-status', this._openStatus)
   },
@@ -842,11 +888,19 @@ export default {
     effectiveGroupPrice(group) {
       return (group.isSpecial && group.specialPrice != null) ? group.specialPrice : group.price
     },
+    isPickPackageAvailable(pick) {
+      if (!pick?.groupId) return false
+      return this.displayedPackages.some(group => Number(group.id) === Number(pick.groupId))
+    },
+    openVipForPick(pick) {
+      const groupId = this.isPickPackageAvailable(pick) ? pick.groupId : null
+      this.openVipMenu(groupId)
+    },
     async fetchUserActiveSub() {
       try {
         const user = getUser()
         if (!user || !user.id) return
-        const { data: subs } = await axios.get('/api/subscriptions/user/' + user.id)
+        const { data: subs } = await axios.get('/api/subscriptions/me')
         this.userActiveSubs = subs.filter(s => s.status === 'active').map(this.normalizeSub)
       } catch { /* ignore */ }
     },
@@ -869,9 +923,11 @@ export default {
         if (data) this.vipCfg = { ...this.vipCfg, ...data }
       } catch { /* use defaults */ }
     },
-    async fetchGroups() {
-      this.groupsLoading = true
-      this.groupsError = ''
+    async fetchGroups({ silent = false } = {}) {
+      if (!silent) {
+        this.groupsLoading = true
+        this.groupsError = ''
+      }
       try {
         const { data } = await axios.get('/api/groups')
         // Normalize: handle both snake_case (Laravel) and camelCase (Node.js)
@@ -895,9 +951,9 @@ export default {
           }
         })
       } catch {
-        this.groupsError = 'Could not load packages. Please refresh and try again.'
+        if (!silent) this.groupsError = 'Could not load packages. Please refresh and try again.'
       } finally {
-        this.groupsLoading = false
+        if (!silent) this.groupsLoading = false
       }
     },
     handleForcedLogout() {
@@ -905,6 +961,7 @@ export default {
       this.userActiveSubs = []
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       if (['payment-prompt', 'processing', 'deadline-closed'].includes(this.vipStep)) {
         this.stopPolling()
         this.vipStep = 3
@@ -968,6 +1025,7 @@ export default {
       this.statusChecked = false
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       this.pendingStatusMsg = ''
 
       const stored = isLoggedIn() ? getUser() : null
@@ -1195,6 +1253,7 @@ export default {
       this.statusChecked = false
       this.activeSub = null
       this.activeSubs = []
+      this.recoveryTickets = []
       this.pendingStatusMsg = ''
       try {
         const loggedInUser = isLoggedIn() ? (this.regUser || getUser()) : null
@@ -1203,7 +1262,11 @@ export default {
           this.statusChecked = true
           return
         }
-        const { data: subs } = await axios.get('/api/subscriptions/user/' + loggedInUser.id)
+        const [{ data: subs }, { data: recoveries }] = await Promise.all([
+          axios.get('/api/subscriptions/me'),
+          axios.get('/api/package-releases/recoveries/me')
+        ])
+        this.recoveryTickets = Array.isArray(recoveries) ? recoveries : []
         const allActive = subs.filter(s => s.status === 'active').map(this.normalizeSub)
         if (allActive.length) {
           this.activeSub  = allActive[0]
@@ -1378,6 +1441,19 @@ export default {
   gap: 20px;
   margin-bottom: 32px;
 }
+.picks-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  margin-bottom: 32px;
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 16px;
+  background: rgba(255,215,0,0.05);
+  color: var(--text-muted);
+}
+.picks-empty-state .pick-vip-btn { flex-shrink: 0; }
 
 @keyframes hotDeal {
   0%, 100% { border-color: rgba(255,255,255,0.07); box-shadow: none; }
@@ -1401,6 +1477,12 @@ export default {
   transform: translateY(-5px);
   box-shadow: 0 10px 36px rgba(0,0,0,0.35);
 }
+.pick-card--closed {
+  animation: none;
+  border-color: rgba(255,255,255,0.1);
+  opacity: 0.78;
+}
+.pick-card--closed:hover { transform: none; }
 
 /* Kit top strip */
 /* Image bar */
@@ -1436,12 +1518,42 @@ export default {
 }
 /* Caption */
 .pick-caption {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--white);
   line-height: 1.5;
   margin: 0;
   opacity: 0.92;
+}
+.pick-package-meta {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pick-package-closed {
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.pick-package-price {
+  margin-top: auto;
+  color: var(--gold);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+.pick-package-price small {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.8px;
 }
 
 /* ── Win probability bar ── */
@@ -1488,6 +1600,13 @@ export default {
   animation: vipBeep 1.6s ease-out infinite;
 }
 .pick-vip-btn:hover { opacity: 0.88; transform: scale(1.04); }
+.pick-vip-btn:disabled {
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.55);
+  cursor: not-allowed;
+  animation: none;
+}
+.pick-vip-btn:disabled:hover { opacity: 1; transform: none; }
 
 /* VIP active tag (replaces Join VIP button when user has active sub) */
 .pick-vip-active-tag {
@@ -2117,4 +2236,12 @@ export default {
   border-color: var(--gold, #FFD700);
   color: var(--dark, #0a0a0a);
 }
+.recovery-list { display:grid; gap:12px; margin:16px 0; text-align:left; }
+.recovery-ticket { padding:16px; border:1px solid rgba(255,215,0,.28); border-radius:13px; background:linear-gradient(145deg,rgba(255,215,0,.10),rgba(255,255,255,.025)); }
+.recovery-ticket-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.recovery-ticket-head > div { display:flex; flex-direction:column; gap:4px; }
+.recovery-ticket-head > span { font-size:24px; }
+.recovery-ticket strong { color:#fff; font-size:15px; }
+.recovery-ticket p { color:rgba(255,255,255,.58); font-size:12px; line-height:1.5; }
+.recovery-free { color:#ffd700; font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; }
 </style>

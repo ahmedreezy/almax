@@ -48,6 +48,7 @@ function buildPool () {
       is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
       special_price NUMERIC(12,2),
       special_odds  VARCHAR(50),
+      photo_url     VARCHAR(500) DEFAULT '',
       subscription_deadline VARCHAR(16),
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
@@ -123,6 +124,22 @@ describe('GET /api/groups — public', () => {
     await global.__groupTestPool.query(`UPDATE groups SET is_active = true WHERE name = 'Daily Odd 5'`)
   })
 
+  test('keeps active packages visible but closed after their subscription deadline', async () => {
+    await global.__groupTestPool.query(
+      `UPDATE groups SET is_active = true, subscription_deadline = '2000-01-01T12:00' WHERE name = 'Daily Odd 5'`
+    )
+
+    const res = await request.get('/api/groups')
+    expect(res.status).toBe(200)
+    const closed = res.body.find(g => g.name === 'Daily Odd 5')
+    expect(closed).toBeDefined()
+    expect(closed.isClosed).toBe(true)
+
+    await global.__groupTestPool.query(
+      `UPDATE groups SET subscription_deadline = NULL WHERE name = 'Daily Odd 5'`
+    )
+  })
+
   test('hides Special Odds when special_price is null', async () => {
     // Ensure special group has no price
     await global.__groupTestPool.query(`UPDATE groups SET special_price = null, is_active = false WHERE name = 'Special Odds'`)
@@ -160,6 +177,9 @@ describe('GET /api/groups — public', () => {
     expect(item).toHaveProperty('isSpecial')
     expect(item).toHaveProperty('isActive')
     expect(item).toHaveProperty('specialPrice')
+    expect(item).not.toHaveProperty('betslipLink')
+    expect(item).not.toHaveProperty('betslipCode')
+    expect(item).not.toHaveProperty('photoUrl')
   })
 
   // ── Verify each required package ─────────────────────────────────────────
@@ -308,7 +328,7 @@ describe('PATCH /api/groups/:id — admin update', () => {
     )
   })
 
-  test('admin cannot activate a package with a past deadline', async () => {
+  test('admin can activate a closed package so it remains publicly visible', async () => {
     await global.__groupTestPool.query(
       `UPDATE groups SET is_active = false, subscription_deadline = '2000-01-01T12:00' WHERE id = $1`,
       [weeklyOdd5Id]
@@ -318,8 +338,15 @@ describe('PATCH /api/groups/:id — admin update', () => {
       .set(authHeader())
       .send({ isActive: true })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error).toMatch(/past deadlines/)
+    expect(res.status).toBe(200)
+    expect(res.body.isActive).toBe(true)
+    expect(res.body.isClosed).toBe(true)
+
+    const pub = await request.get('/api/groups')
+    expect(pub.body.find(g => g.id === weeklyOdd5Id)).toMatchObject({
+      isActive: true,
+      isClosed: true
+    })
 
     await global.__groupTestPool.query(
       `UPDATE groups SET is_active = true, subscription_deadline = NULL WHERE id = $1`,

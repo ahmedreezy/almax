@@ -28,6 +28,17 @@
 
     <PhotoLightbox />
 
+    <transition name="update-toast">
+      <aside v-if="updateAvailable" :class="['update-ready', { 'on-admin': isAdminRoute }]" role="status" aria-live="polite">
+        <div class="update-icon" aria-hidden="true">↻</div>
+        <div class="update-copy">
+          <strong>New update ready</strong>
+          <span>Refresh to get the latest Almax improvements.</span>
+        </div>
+        <button type="button" @click="applyUpdate">Update now</button>
+      </aside>
+    </transition>
+
     <footer v-if="!isAdminRoute" class="powered-footnote">
       Powered by Dape Technologies
     </footer>
@@ -38,6 +49,7 @@
 import './assets/styles/global.css'
 import UserProfile from './components/UserProfile.vue'
 import PhotoLightbox from './components/PhotoLightbox.vue'
+const { evaluateAppUpdate } = require('./utils/updateVersion')
 export default {
   name: 'App',
   components: { UserProfile, PhotoLightbox },
@@ -47,6 +59,13 @@ export default {
       themeMode: saved,
       systemIsLight: window.matchMedia('(prefers-color-scheme: light)').matches,
       _systemMedia: null,
+      _updateTimer: null,
+      updateAvailable: false,
+      latestBuildId: '',
+      latestVersion: '',
+      currentVersion: process.env.VUE_APP_VERSION || '',
+      currentBuildId: process.env.VUE_APP_BUILD_ID || '',
+      currentBuiltAt: process.env.VUE_APP_BUILT_AT || '',
       themeOptions: [
         { value: 'light',  icon: '☀️', label: 'Light'  },
         { value: 'dark',   icon: '🌙', label: 'Dark'   },
@@ -82,12 +101,54 @@ export default {
   mounted() {
     document.body.classList.toggle('light-mode', this.isLight)
     if (this.themeMode === 'system') this._attachSystemListener()
+    this.checkForUpdate()
+    this._updateTimer = window.setInterval(this.checkForUpdate, 20000)
+    window.addEventListener('focus', this.checkForUpdate)
+    window.addEventListener('online', this.checkForUpdate)
+    document.addEventListener('visibilitychange', this.handleVisibilityChange)
   },
   beforeUnmount() {
     this._detachSystemListener()
+    window.clearInterval(this._updateTimer)
+    window.removeEventListener('focus', this.checkForUpdate)
+    window.removeEventListener('online', this.checkForUpdate)
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
   },
   methods: {
     setTheme(mode) { this.themeMode = mode },
+    handleVisibilityChange() {
+      if (!document.hidden) this.checkForUpdate()
+    },
+    async checkForUpdate() {
+      try {
+        const response = await fetch(`/version.json?_=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        })
+        if (!response.ok) return
+        const manifest = await response.json()
+        const updateAvailable = evaluateAppUpdate({
+          buildId: this.currentBuildId,
+          version: this.currentVersion,
+          builtAt: this.currentBuiltAt
+        }, manifest)
+        if (updateAvailable) {
+          this.latestBuildId = manifest.buildId || manifest.version
+          this.latestVersion = manifest.version || ''
+          this.updateAvailable = true
+        } else {
+          this.latestBuildId = ''
+          this.latestVersion = ''
+          this.updateAvailable = false
+        }
+      } catch { /* Update checks should never interrupt the application. */ }
+    },
+    applyUpdate() {
+      this.updateAvailable = false
+      const url = new URL(window.location.href)
+      url.searchParams.set('_appv', this.latestBuildId || this.latestVersion || Date.now().toString())
+      window.location.replace(url.toString())
+    },
     _attachSystemListener() {
       this._systemMedia = window.matchMedia('(prefers-color-scheme: light)')
       this._systemMedia.addEventListener('change', this._onSystemChange)
@@ -124,6 +185,17 @@ body.light-mode .powered-footnote {
   border-top-color: rgba(0, 0, 0, 0.12);
   color: rgba(0, 0, 0, 0.56);
 }
+.update-ready { position:fixed; right:24px; bottom:96px; z-index:10020; width:min(390px,calc(100vw - 28px)); display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:13px 14px; border:1px solid rgba(255,215,0,.32); border-radius:16px; background:rgba(19,19,16,.94); color:#fff; box-shadow:0 18px 55px rgba(0,0,0,.48); backdrop-filter:blur(18px); }
+.update-ready.on-admin { bottom:24px; }
+.update-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:50%; background:rgba(255,215,0,.14); color:#ffd700; font-size:21px; font-weight:800; }
+.update-copy { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.update-copy strong { font-size:13px; }
+.update-copy span { color:rgba(255,255,255,.58); font-size:10px; line-height:1.35; }
+.update-ready button { border:0; border-radius:9px; padding:9px 11px; background:#ffd700; color:#111; font-size:11px; font-weight:900; white-space:nowrap; cursor:pointer; }
+body.light-mode .update-ready { border-color:rgba(117,87,0,.2); background:rgba(255,255,252,.96); color:#17150d; box-shadow:0 18px 50px rgba(67,53,8,.2); }
+body.light-mode .update-copy span { color:rgba(20,18,10,.58); }
+.update-toast-enter-active,.update-toast-leave-active { transition:opacity .22s ease,transform .22s ease; }
+.update-toast-enter-from,.update-toast-leave-to { opacity:0; transform:translateY(12px) scale(.97); }
 
 /* ── Theme Nav ── */
 .theme-nav {
@@ -243,5 +315,12 @@ body.light-mode .theme-pill.active {
   .theme-nav-label { display: none; }
   .pill-label { display: none; }
   .theme-pill { padding: 4px 9px; }
+  .update-ready { right:14px; bottom:82px; grid-template-columns:auto 1fr; }
+  .update-ready.on-admin { bottom:14px; }
+  .update-ready button { grid-column:1/-1; width:100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-toast-enter-active,.update-toast-leave-active { transition:none; }
 }
 </style>
