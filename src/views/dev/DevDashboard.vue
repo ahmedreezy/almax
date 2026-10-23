@@ -91,7 +91,7 @@
             <div class="kpi-card kpi-teal">
               <p class="kpi-label">Recorded Commission</p>
               <p class="kpi-value">{{ formatUGX(c.total_earned) }}</p>
-              <p class="kpi-sub">{{ formatUGX(c.wallet_received ?? c.total_paid) }} sent to JPESA</p>
+              <p class="kpi-sub">{{ formatUGX(c.wallet_received ?? c.total_paid) }} paid to commission wallet</p>
             </div>
           </div>
 
@@ -271,6 +271,20 @@
                 <p v-if="!Object.keys(f.by_method || {}).length" class="empty-msg">No data yet</p>
               </div>
             </div>
+
+            <div class="section-card">
+              <p class="section-card-title">Revenue by Gateway</p>
+              <div class="hbar-list">
+                <div v-for="(row, key) in f.by_provider" :key="key" class="hbar-row">
+                  <span class="hbar-label">{{ key.toUpperCase() }}</span>
+                  <div class="hbar-track">
+                    <div class="hbar-fill hbar-fill--blue" :style="{ width: hBarW(row.amount, maxProviderRevenue) + '%' }"></div>
+                  </div>
+                  <span class="hbar-value">{{ formatUGX(row.amount) }} · {{ formatNum(row.count) }}</span>
+                </div>
+                <p v-if="!Object.keys(f.by_provider || {}).length" class="empty-msg">No data yet</p>
+              </div>
+            </div>
           </div>
 
           <!-- Revenue trend chart -->
@@ -309,6 +323,7 @@
                     <th>Status</th>
                     <th>Amount</th>
                     <th>Method</th>
+                    <th>Gateway</th>
                     <th>Phone</th>
                     <th>Reference</th>
                   </tr>
@@ -321,11 +336,12 @@
                     <td><span :class="['status-badge', paymentStatusClass(row.status)]">{{ capitalize(row.status) }}</span></td>
                     <td class="td-amount">{{ formatUGX(row.amount) }}</td>
                     <td class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
+                    <td class="td-method">{{ (row.provider || 'jpesa').toUpperCase() }}</td>
                     <td class="td-muted">{{ row.phone || '—' }}</td>
                     <td class="td-muted"><code>{{ row.payment_reference || row.transaction_id || '—' }}</code></td>
                   </tr>
                   <tr v-if="!f.recent_payments || !f.recent_payments.length">
-                    <td colspan="8" class="td-empty">No payment ledger rows are available.</td>
+                    <td colspan="9" class="td-empty">No payment ledger rows are available.</td>
                   </tr>
                 </tbody>
               </table>
@@ -348,8 +364,8 @@
                   </span>
                 </p>
                 <p class="comm-banner-sub">
-                  <template v-if="c.enabled">Active - available balance is reduced by recorded JPESA withdrawals.</template>
-                  <template v-else>Disabled — set <code>JPESA_AGENT_COMMISSION_ENABLED=true</code> in .env to activate.</template>
+                  <template v-if="c.enabled">Active — available balance is reduced by recorded commission withdrawals.</template>
+                  <template v-else>Disabled — set <code>PAYMENT_AGENT_COMMISSION_ENABLED=true</code> in .env to activate.</template>
                 </p>
               </div>
             </div>
@@ -379,7 +395,7 @@
             <div class="kpi-card kpi-green">
               <p class="kpi-label">Available Now</p>
               <p class="kpi-value">{{ formatUGX(currentCommission) }}</p>
-              <p class="kpi-sub">After JPESA withdrawals</p>
+              <p class="kpi-sub">After recorded withdrawals</p>
             </div>
             <div class="kpi-card kpi-blue">
               <p class="kpi-label">Withdrawn</p>
@@ -387,7 +403,7 @@
               <p class="kpi-sub">{{ formatNum(c.withdrawals?.length ?? 0) }} recent records</p>
             </div>
             <div class="kpi-card kpi-warn">
-              <p class="kpi-label">Sent to JPESA</p>
+              <p class="kpi-label">Paid to wallet</p>
               <p class="kpi-value kpi-value--md">{{ formatUGX(c.wallet_received ?? c.total_paid) }}</p>
               <p class="kpi-sub">{{ formatNum(c.by_status?.completed?.count ?? 0) }} transfers completed</p>
             </div>
@@ -419,8 +435,8 @@
           <div class="section-card withdrawal-card" style="margin-top:24px">
             <div class="withdrawal-head">
               <div>
-                <p class="section-card-title">JPESA Withdrawals</p>
-                <p class="section-card-sub">{{ c.wallet_account || 'JPESA wallet' }}</p>
+                <p class="section-card-title">Commission Withdrawals</p>
+                <p class="section-card-sub">{{ c.wallet_account || 'Commission wallet' }}</p>
               </div>
               <button
                 type="button"
@@ -459,7 +475,7 @@
                   v-model.trim="withdrawalForm.reference"
                   type="text"
                   maxlength="200"
-                  placeholder="JPESA ref"
+                  placeholder="Provider ref"
                 />
               </label>
               <button
@@ -570,7 +586,7 @@
                   <tr v-if="!c.recent || !c.recent.length">
                     <td colspan="8" class="td-empty">
                       <template v-if="c.enabled">Commission is live — records will appear here as payments are confirmed.</template>
-                      <template v-else>Commission is disabled. Set <code>JPESA_AGENT_COMMISSION_ENABLED=true</code> to start tracking.</template>
+                      <template v-else>Commission is disabled. Set <code>PAYMENT_AGENT_COMMISSION_ENABLED=true</code> to start tracking.</template>
                     </td>
                   </tr>
                 </tbody>
@@ -815,6 +831,71 @@
           </template>
         </div>
 
+        <!-- ========== PAYMENT GATEWAY ================================== -->
+        <div v-if="activeSection === 'gateway'" class="gateway-panel">
+          <div class="gateway-callout">
+            <div>
+              <span class="gateway-eyebrow">LIVE ROUTING CONTROL</span>
+              <h2>{{ gatewayActiveName }} is handling new payments</h2>
+              <p>Switching affects new payment attempts only. Existing payments and commission payouts remain pinned to their original gateway.</p>
+            </div>
+            <span :class="['gateway-live', gatewayLoading ? 'gateway-live--busy' : '']">
+              <i></i>{{ gatewayLoading ? 'Checking' : 'Active' }}
+            </span>
+          </div>
+
+          <p v-if="gatewayError" class="gateway-error">{{ gatewayError }}</p>
+
+          <div class="gateway-grid">
+            <article
+              v-for="(provider, key) in gatewayConfig.providers"
+              :key="key"
+              :class="['gateway-card', { 'gateway-card--active': gatewayConfig.activeProvider === key }]"
+            >
+              <div class="gateway-card-head">
+                <div>
+                  <span class="gateway-provider-code">{{ key.toUpperCase() }}</span>
+                  <h3>{{ provider.name }}</h3>
+                </div>
+                <span v-if="gatewayConfig.activeProvider === key" class="gateway-active-pill">IN USE</span>
+                <span v-else :class="['gateway-ready-pill', provider.configured ? 'is-ready' : 'is-missing']">
+                  {{ provider.configured ? 'CONFIGURED' : 'SETUP NEEDED' }}
+                </span>
+              </div>
+
+              <p class="gateway-status-copy">{{ provider.message }}</p>
+              <div class="gateway-capabilities">
+                <span>Collections</span>
+                <span>Commission payouts</span>
+              </div>
+              <div v-if="provider.missing?.length" class="gateway-missing">
+                <span v-for="item in provider.missing" :key="item">{{ item }}</span>
+              </div>
+
+              <div class="gateway-actions">
+                <button type="button" class="gateway-test-btn" :disabled="gatewayTesting === key" @click="testGateway(key)">
+                  {{ gatewayTesting === key ? 'Testing…' : 'Test connection' }}
+                </button>
+                <button
+                  v-if="gatewayConfig.activeProvider !== key"
+                  type="button"
+                  class="gateway-switch-btn"
+                  :disabled="gatewaySwitching || !provider.configured"
+                  @click="switchGateway(key, provider.name)"
+                >
+                  {{ gatewaySwitching === key ? 'Switching…' : 'Use ' + provider.name }}
+                </button>
+              </div>
+            </article>
+          </div>
+
+          <div class="gateway-audit">
+            <span>Last change</span>
+            <strong>{{ gatewayConfig.lastChangedAt ? fmtDateTime(gatewayConfig.lastChangedAt) : 'No recorded switch' }}</strong>
+            <span v-if="gatewayConfig.lastChangedBy">by {{ gatewayConfig.lastChangedBy }}</span>
+          </div>
+        </div>
+
       </div>
       <!-- /content -->
     </main>
@@ -837,6 +918,11 @@ export default {
       supportDays: 30,
       supportLoading: false,
       supportError: '',
+      gatewayConfig: { activeProvider: 'jpesa', providers: {} },
+      gatewayLoading: false,
+      gatewayError: '',
+      gatewayTesting: '',
+      gatewaySwitching: '',
       retryingCommission: {},
       withdrawalSaving: false,
       withdrawalError: '',
@@ -882,6 +968,12 @@ export default {
           label: 'Support Insights',
           desc: 'Customer feedback',
           icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/><path d="M8 9h8M8 13h5"/></svg>'
+        },
+        {
+          id: 'gateway',
+          label: 'Payment Gateway',
+          desc: 'Live routing control',
+          icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M7 15h2"/></svg>'
         }
       ]
     }
@@ -911,6 +1003,9 @@ export default {
     u() { return this.analytics?.users || {} },
     s() { return this.analytics?.subscriptions || {} },
     si() { return this.supportInsights || {} },
+    gatewayActiveName() {
+      return this.gatewayConfig.providers?.[this.gatewayConfig.activeProvider]?.name || 'JPesa'
+    },
     supportCategoryRows() {
       return Object.entries(this.si.by_category || {})
         .map(([category, row]) => ({ category, ...row }))
@@ -944,6 +1039,9 @@ export default {
     maxMethodRevenue() {
       return Math.max(...Object.values(this.f.by_method || {}).map(Number), 1)
     },
+    maxProviderRevenue() {
+      return Math.max(...Object.values(this.f.by_provider || {}).map(row => Number(row.amount) || 0), 1)
+    },
     maxPlanComm() {
       return Math.max(...Object.values(this.c.by_plan || {}).map(Number), 1)
     },
@@ -955,9 +1053,57 @@ export default {
     }
   },
   async mounted() {
-    await this.fetchAnalytics()
+    await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig()])
   },
   methods: {
+    async fetchGatewayConfig() {
+      this.gatewayLoading = true
+      this.gatewayError = ''
+      try {
+        const { data } = await devApi.get('/api/developer/payment-gateway')
+        this.gatewayConfig = data
+      } catch (err) {
+        this.gatewayError = err.response?.data?.message || 'Payment gateway configuration could not be loaded.'
+      } finally {
+        this.gatewayLoading = false
+      }
+    },
+    async testGateway(provider) {
+      this.gatewayTesting = provider
+      this.gatewayError = ''
+      try {
+        const { data } = await devApi.post(`/api/developer/payment-gateway/${provider}/check`)
+        this.gatewayConfig.providers[provider] = {
+          ...this.gatewayConfig.providers[provider],
+          ...data
+        }
+      } catch (err) {
+        const data = err.response?.data || {}
+        if (this.gatewayConfig.providers[provider]) {
+          this.gatewayConfig.providers[provider] = {
+            ...this.gatewayConfig.providers[provider],
+            ...(data.readiness || data),
+            ready: false
+          }
+        }
+        this.gatewayError = data.message || 'Gateway connection test failed.'
+      } finally {
+        this.gatewayTesting = ''
+      }
+    },
+    async switchGateway(provider, name) {
+      if (!confirm(`Switch new payment attempts to ${name}? Existing attempts will stay with their original gateway.`)) return
+      this.gatewaySwitching = provider
+      this.gatewayError = ''
+      try {
+        const { data } = await devApi.patch('/api/developer/payment-gateway', { provider })
+        this.gatewayConfig = data
+      } catch (err) {
+        this.gatewayError = err.response?.data?.message || `Could not switch to ${name}.`
+      } finally {
+        this.gatewaySwitching = ''
+      }
+    },
     async fetchAnalytics() {
       this.loading = true
       this.error = ''
@@ -2308,6 +2454,44 @@ code {
 .feedback-sentiment--frustrated { color: #fb923c; }
 .feedback-sentiment--angry { color: #f87171; }
 
+/* ── Gateway control ───────────────────────────────────────────────────── */
+.gateway-panel { max-width: 1040px; }
+.gateway-callout {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px;
+  border: 1px solid #23304a;
+  background: #0d1422;
+}
+.gateway-eyebrow { color: #60a5fa; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
+.gateway-callout h2 { margin: 8px 0 7px; color: #f8fafc; font-size: 24px; }
+.gateway-callout p { max-width: 680px; margin: 0; color: #7f8ca3; font-size: 12px; line-height: 1.65; }
+.gateway-live { align-self: flex-start; display: inline-flex; align-items: center; gap: 7px; color: #34d399; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.gateway-live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 5px rgba(52, 211, 153, .08); }
+.gateway-live--busy { color: #fbbf24; }
+.gateway-error { margin: 14px 0 0; padding: 11px 13px; border-left: 2px solid #f87171; background: rgba(248, 113, 113, .07); color: #fca5a5; font-size: 11px; }
+.gateway-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.gateway-card { padding: 22px; border: 1px solid #1f2a3d; background: #0c121e; transition: border-color .2s, background .2s; }
+.gateway-card--active { border-color: rgba(52, 211, 153, .48); background: #0c171b; }
+.gateway-card-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.gateway-provider-code { color: #4b5870; font-size: 8px; font-weight: 900; letter-spacing: .18em; }
+.gateway-card h3 { margin: 5px 0 0; color: #f8fafc; font-size: 20px; }
+.gateway-active-pill, .gateway-ready-pill { padding: 5px 7px; border: 1px solid; font-size: 8px; font-weight: 900; letter-spacing: .08em; }
+.gateway-active-pill, .gateway-ready-pill.is-ready { border-color: rgba(52, 211, 153, .35); color: #34d399; }
+.gateway-ready-pill.is-missing { border-color: rgba(248, 113, 113, .35); color: #f87171; }
+.gateway-status-copy { min-height: 34px; margin: 18px 0; color: #7f8ca3; font-size: 11px; line-height: 1.5; }
+.gateway-capabilities { display: flex; gap: 8px; flex-wrap: wrap; }
+.gateway-capabilities span { padding: 5px 8px; background: #111b2b; color: #8ea0bb; font-size: 9px; }
+.gateway-missing { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 12px; }
+.gateway-missing span { color: #fca5a5; font-family: monospace; font-size: 9px; }
+.gateway-actions { display: flex; gap: 8px; margin-top: 24px; }
+.gateway-actions button { flex: 1; padding: 10px 12px; border: 1px solid #2a3850; background: transparent; color: #b5c1d2; font-size: 10px; font-weight: 800; cursor: pointer; }
+.gateway-actions button:disabled { opacity: .42; cursor: not-allowed; }
+.gateway-actions .gateway-switch-btn { border-color: #3b82f6; background: #2563eb; color: white; }
+.gateway-audit { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: #59677d; font-size: 10px; }
+.gateway-audit strong { color: #9aa8bb; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .kpi-grid       { grid-template-columns: repeat(2, 1fr); }
@@ -2317,6 +2501,7 @@ code {
   .insights-bottom-grid { grid-template-columns: 1fr; }
   .withdrawal-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .withdrawal-submit { width: 100%; }
+  .gateway-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
@@ -2332,5 +2517,6 @@ code {
   .withdrawal-head { flex-direction: column; }
   .withdrawal-form { grid-template-columns: 1fr; }
   .withdrawal-row  { grid-template-columns: 78px 1fr 104px; }
+  .gateway-callout { flex-direction: column; }
 }
 </style>

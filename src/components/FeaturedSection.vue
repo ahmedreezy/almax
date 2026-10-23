@@ -392,7 +392,7 @@
             <button class="mm-next-btn" style="margin-top:8px;opacity:0.75" @click="openMySubscriptions">
               View My Subscriptions →
             </button>
-            <p class="mm-check-link" style="margin-top:14px;cursor:pointer;color:var(--gold);font-size:13px;text-decoration:underline"
+            <p v-if="processingGateway === 'jpesa'" class="mm-check-link" style="margin-top:14px;cursor:pointer;color:var(--gold);font-size:13px;text-decoration:underline"
                @click="vipStep = 'submit-txn'; txnInput = ''; txnError = ''">
               Already paid? Enter your Airtel transaction ID →
             </p>
@@ -683,6 +683,7 @@ export default {
       payLoading: false,
       // Processing / polling
       processingSubId: null,
+      processingGateway: 'jpesa',
       pollCount: 0,
       pollError: '',
       pollSecondsLeft: 180,
@@ -1015,6 +1016,7 @@ export default {
       this.payPhone         = ''
       this.txnInput         = ''
       this.txnError         = ''
+      this.processingGateway = 'jpesa'
       this.linkedGroupId    = null
       this.vipStep          = 1
       this.fetchGroups()
@@ -1185,6 +1187,7 @@ export default {
           phone:         this.payPhone
         })
         this.processingSubId = data.subscription?.id || null
+        this.processingGateway = data.subscription?.payment?.provider || data.subscription?.paymentProvider || 'jpesa'
         this.pollCount = 0
         this.pollError = ''
         this.vipStep = 'processing'
@@ -1193,6 +1196,7 @@ export default {
         if (err.response?.status === 409 && err.response?.data?.existingSubscriptionId) {
           // Duplicate-submit guard on backend: continue watching the already pending request.
           this.processingSubId = err.response.data.existingSubscriptionId
+          this.processingGateway = err.response.data.paymentProvider || 'jpesa'
           this.pollCount = 0
           this.pollError = ''
           this.vipStep = 'processing'
@@ -1224,6 +1228,7 @@ export default {
         }
         try {
           const { data } = await axios.get('/api/subscriptions/' + this.processingSubId + '/payment-status')
+          this.processingGateway = data.subscription?.paymentProvider || this.processingGateway
           if (data.status === 'active') {
             this.stopPolling()
             this.activeSub = { ...this.normalizeSub(data.subscription), packagePhoto: this.selectedGroup?.photoUrl || data.subscription.packagePhoto || '' }
