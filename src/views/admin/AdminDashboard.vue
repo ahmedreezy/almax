@@ -128,7 +128,7 @@ export default {
         { id: 'recent-wins',   label: 'Recent Wins',        desc: 'Published wins' },
         { id: 'vip-packages',  label: 'VIP Packages',       desc: 'Pricing and betslips' },
         { id: 'payments',      label: 'Payments',           desc: 'Subscriptions and revenue' },
-        { id: 'wallet',        label: 'Wallet & Payouts',   desc: 'Balances and requests' },
+        { id: 'wallet',        label: 'Wallet & Payouts',   desc: 'Relworx funds' },
         { id: 'users',         label: 'Members',            desc: 'Registered accounts' },
         { id: 'support',       label: 'Customer Chats',     desc: 'AI conversations and takeover' },
         { id: 'testimonials',  label: 'Testimonials',       desc: 'Social proof content' },

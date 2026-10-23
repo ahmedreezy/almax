@@ -804,7 +804,7 @@
             <div>
               <span class="gateway-eyebrow">LIVE ROUTING CONTROL</span>
               <h2>{{ gatewayActiveName }} is handling new payments</h2>
-              <p>Switching affects new payment attempts only. JPesa keeps automatic commission payouts; Relworx commission accrues in the developer wallet.</p>
+              <p>Only one gateway is active. Switching validates the selected gateway, activates it for new payments, and disables the other gateway.</p>
             </div>
             <span :class="['gateway-live', gatewayLoading ? 'gateway-live--busy' : '']">
               <i></i>{{ gatewayLoading ? 'Checking' : 'Active' }}
@@ -917,7 +917,7 @@ export default {
         {
           id: 'wallet',
           label: 'Wallet & Payouts',
-          desc: 'Reserved Relworx commission',
+          desc: 'Relworx funds',
           icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7V5a2 2 0 00-2-2H5a3 3 0 000 6h15v10H5a3 3 0 010-6h15"/><circle cx="16" cy="14" r="1"/></svg>'
         },
         {
@@ -964,7 +964,7 @@ export default {
       const legacyAvailable = available !== undefined && available !== null
         ? Number(available) || 0
         : Math.max(0, Number(this.c.total_paid || 0) - Number(this.c.total_withdrawn || 0))
-      const relworxAvailable = Number(this.walletSummary?.wallet?.by_provider?.relworx?.available || 0)
+      const relworxAvailable = Number(this.walletSummary?.wallet?.available || 0)
       return legacyAvailable + relworxAvailable
     },
     u() { return this.analytics?.users || {} },
