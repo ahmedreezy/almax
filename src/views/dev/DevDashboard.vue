@@ -1,7 +1,7 @@
 <template>
-  <div class="dev-dash">
+  <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200">
     <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
-    <aside class="d-sidebar">
+    <aside class="d-sidebar tw-border-line tw-bg-panel">
       <div class="d-logo">
         <img class="d-mark" src="@/assets/almax-mark.png" alt="Almax logo" />
         <div>
@@ -38,12 +38,18 @@
     </aside>
 
     <!-- ── Main Panel ──────────────────────────────────────────────────── -->
-    <main class="d-main">
-      <header class="d-header">
+    <main class="d-main tw-min-w-0 tw-bg-ink">
+      <header class="d-header tw-border-line tw-bg-panel/95 tw-backdrop-blur">
         <div>
           <p class="d-kicker">Developer Analytics</p>
           <h1 class="d-title">{{ currentSection.label }}</h1>
           <p class="d-subtitle">{{ currentSection.desc }}</p>
+          <label class="tw-mt-3 tw-block md:tw-hidden">
+            <span class="tw-sr-only">Choose dashboard section</span>
+            <select v-model="activeSection" class="tw-w-full tw-rounded-md tw-border tw-border-line tw-bg-ink tw-px-3 tw-py-2 tw-text-sm tw-font-semibold tw-text-white tw-outline-none focus:tw-border-signal">
+              <option v-for="item in navItems" :key="'mobile-' + item.id" :value="item.id">{{ item.label }}</option>
+            </select>
+          </label>
         </div>
         <div class="d-header-right">
           <span class="d-date">{{ todayDate }}</span>
@@ -67,7 +73,7 @@
       </div>
 
       <!-- ── Content ──────────────────────────────────────────────────── -->
-      <div v-else-if="analytics" class="d-body">
+      <div v-else-if="analytics" class="d-body tw-mx-auto tw-w-full tw-max-w-[1600px] tw-space-y-6">
 
         <!-- ========== OVERVIEW ========================================= -->
         <div v-if="activeSection === 'overview'">
@@ -411,9 +417,9 @@
 
           <div class="kpi-grid" style="margin-top:14px">
             <div class="kpi-card">
-              <p class="kpi-label">Pending Commission</p>
-              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.pending?.amount ?? 0) }}</p>
-              <p class="kpi-sub">{{ formatNum(c.by_status?.pending?.count ?? 0) }} queued transfers</p>
+              <p class="kpi-label">Accrued Relworx Commission</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.accrued?.amount ?? 0) }}</p>
+              <p class="kpi-sub">{{ formatNum(c.by_status?.accrued?.count ?? 0) }} ledger credits</p>
             </div>
             <div class="kpi-card">
               <p class="kpi-label">Processing Commission</p>
@@ -435,59 +441,17 @@
           <div class="section-card withdrawal-card" style="margin-top:24px">
             <div class="withdrawal-head">
               <div>
-                <p class="section-card-title">Commission Withdrawals</p>
-                <p class="section-card-sub">{{ c.wallet_account || 'Commission wallet' }}</p>
+                <p class="section-card-title">Legacy withdrawal history</p>
+                <p class="section-card-sub">These records are read-only. New Relworx payouts are requested from Wallet & Payouts.</p>
               </div>
               <button
                 type="button"
                 class="withdrawal-secondary"
-                @click="fillWithdrawalBalance"
-                :disabled="!currentCommission || withdrawalSaving"
+                @click="activeSection = 'wallet'"
               >
-                Full Balance
+                Open wallet
               </button>
             </div>
-
-            <form class="withdrawal-form" @submit.prevent="recordCommissionWithdrawal">
-              <label class="withdrawal-field">
-                <span>Amount</span>
-                <input
-                  v-model="withdrawalForm.amount"
-                  type="number"
-                  min="1"
-                  step="1"
-                  :max="currentCommission || null"
-                  placeholder="UGX"
-                  required
-                />
-              </label>
-              <label class="withdrawal-field">
-                <span>Date</span>
-                <input
-                  v-model="withdrawalForm.withdrawn_at"
-                  type="date"
-                  :max="todayInputDate"
-                />
-              </label>
-              <label class="withdrawal-field withdrawal-field--wide">
-                <span>Reference</span>
-                <input
-                  v-model.trim="withdrawalForm.reference"
-                  type="text"
-                  maxlength="200"
-                  placeholder="Provider ref"
-                />
-              </label>
-              <button
-                type="submit"
-                class="withdrawal-submit"
-                :disabled="withdrawalSaving || !Number(withdrawalForm.amount)"
-              >
-                {{ withdrawalSaving ? 'Recording' : 'Record Withdrawal' }}
-              </button>
-            </form>
-
-            <p v-if="withdrawalError" class="withdrawal-error">{{ withdrawalError }}</p>
 
             <div v-if="c.withdrawals && c.withdrawals.length" class="withdrawal-list">
               <div v-for="item in c.withdrawals" :key="item.id" class="withdrawal-row">
@@ -831,13 +795,16 @@
           </template>
         </div>
 
+        <!-- ========== DEVELOPER WALLET ================================ -->
+        <DeveloperWallet v-if="activeSection === 'wallet'" @updated="walletSummary = $event" />
+
         <!-- ========== PAYMENT GATEWAY ================================== -->
         <div v-if="activeSection === 'gateway'" class="gateway-panel">
           <div class="gateway-callout">
             <div>
               <span class="gateway-eyebrow">LIVE ROUTING CONTROL</span>
               <h2>{{ gatewayActiveName }} is handling new payments</h2>
-              <p>Switching affects new payment attempts only. Existing payments and commission payouts remain pinned to their original gateway.</p>
+              <p>Switching affects new payment attempts only. JPesa keeps automatic commission payouts; Relworx commission accrues in the developer wallet.</p>
             </div>
             <span :class="['gateway-live', gatewayLoading ? 'gateway-live--busy' : '']">
               <i></i>{{ gatewayLoading ? 'Checking' : 'Active' }}
@@ -865,8 +832,8 @@
 
               <p class="gateway-status-copy">{{ provider.message }}</p>
               <div class="gateway-capabilities">
-                <span>Collections</span>
-                <span>Commission payouts</span>
+                <span>{{ provider.capabilities?.collections ? 'Collections enabled' : 'Collections unavailable' }}</span>
+                <span>{{ provider.capabilities?.payouts ? 'API payouts enabled' : 'Payout requests only' }}</span>
               </div>
               <div v-if="provider.missing?.length" class="gateway-missing">
                 <span v-for="item in provider.missing" :key="item">{{ item }}</span>
@@ -904,9 +871,11 @@
 
 <script>
 import devApi from '../../utils/devApi'
+import DeveloperWallet from '../../components/dev/DeveloperWallet.vue'
 
 export default {
   name: 'DevDashboard',
+  components: { DeveloperWallet },
   data() {
     const d = new Date()
     return {
@@ -914,6 +883,7 @@ export default {
       loading: true,
       error: '',
       analytics: null,
+      walletSummary: null,
       supportInsights: null,
       supportDays: 30,
       supportLoading: false,
@@ -924,13 +894,6 @@ export default {
       gatewayTesting: '',
       gatewaySwitching: '',
       retryingCommission: {},
-      withdrawalSaving: false,
-      withdrawalError: '',
-      withdrawalForm: {
-        amount: '',
-        withdrawn_at: '',
-        reference: ''
-      },
       todayDate: d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
       navItems: [
         {
@@ -950,6 +913,12 @@ export default {
           label: 'Commission',
           desc: 'Platform transfer tracking',
           icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+        },
+        {
+          id: 'wallet',
+          label: 'Wallet & Payouts',
+          desc: 'Reserved Relworx commission',
+          icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7V5a2 2 0 00-2-2H5a3 3 0 000 6h15v10H5a3 3 0 010-6h15"/><circle cx="16" cy="14" r="1"/></svg>'
         },
         {
           id: 'users',
@@ -992,13 +961,11 @@ export default {
     },
     currentCommission() {
       const available = this.c.available ?? this.c.current_total
-      if (available !== undefined && available !== null) return Number(available) || 0
-      return Math.max(0, Number(this.c.total_paid || 0) - Number(this.c.total_withdrawn || 0))
-    },
-    todayInputDate() {
-      const d = new Date()
-      d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-      return d.toISOString().slice(0, 10)
+      const legacyAvailable = available !== undefined && available !== null
+        ? Number(available) || 0
+        : Math.max(0, Number(this.c.total_paid || 0) - Number(this.c.total_withdrawn || 0))
+      const relworxAvailable = Number(this.walletSummary?.wallet?.by_provider?.relworx?.available || 0)
+      return legacyAvailable + relworxAvailable
     },
     u() { return this.analytics?.users || {} },
     s() { return this.analytics?.subscriptions || {} },
@@ -1053,9 +1020,15 @@ export default {
     }
   },
   async mounted() {
-    await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig()])
+    await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig(), this.fetchWalletSummary()])
   },
   methods: {
+    async fetchWalletSummary() {
+      try {
+        const { data } = await devApi.get('/api/developer/wallet')
+        this.walletSummary = data
+      } catch { /* The wallet section provides its own retry state. */ }
+    },
     async fetchGatewayConfig() {
       this.gatewayLoading = true
       this.gatewayError = ''
@@ -1217,45 +1190,6 @@ export default {
         return 'Retry commission payment: ' + row.agent_commission_error
       }
       return 'Retry commission payment'
-    },
-    fillWithdrawalBalance() {
-      this.withdrawalError = ''
-      this.withdrawalForm.amount = this.currentCommission ? String(Math.floor(this.currentCommission)) : ''
-      if (!this.withdrawalForm.withdrawn_at) {
-        this.withdrawalForm.withdrawn_at = this.todayInputDate
-      }
-    },
-    async recordCommissionWithdrawal() {
-      const amount = Number(this.withdrawalForm.amount)
-      this.withdrawalError = ''
-
-      if (!amount || amount < 1) {
-        this.withdrawalError = 'Enter a withdrawal amount.'
-        return
-      }
-
-      this.withdrawalSaving = true
-      try {
-        await devApi.post('/api/analytics/developer/commission-withdrawals', {
-          amount,
-          withdrawn_at: this.withdrawalForm.withdrawn_at || undefined,
-          reference: this.withdrawalForm.reference || undefined
-        })
-        this.withdrawalForm = {
-          amount: '',
-          withdrawn_at: '',
-          reference: ''
-        }
-        await this.fetchAnalytics()
-      } catch (err) {
-        const errors = err.response?.data?.errors || {}
-        this.withdrawalError = errors.amount?.[0]
-          || errors.withdrawn_at?.[0]
-          || err.response?.data?.message
-          || 'Could not record withdrawal. Please try again.'
-      } finally {
-        this.withdrawalSaving = false
-      }
     },
     async retryCommission(row) {
       if (!this.canRetryCommission(row) || this.retryingCommission[row.id]) return
@@ -2518,5 +2452,23 @@ code {
   .withdrawal-form { grid-template-columns: 1fr; }
   .withdrawal-row  { grid-template-columns: 78px 1fr 104px; }
   .gateway-callout { flex-direction: column; }
+}
+
+/* Tailwind-backed developer-console refresh. Existing domain-specific chart
+   rules stay local while these shared surfaces establish one visual system. */
+.d-sidebar { @apply tw-shadow-panel; }
+.d-header { @apply tw-sticky tw-top-0 tw-z-40; }
+.d-nav-btn { @apply tw-rounded-md tw-border tw-border-transparent tw-transition-colors; }
+.d-nav-btn:hover { @apply tw-border-line tw-bg-slate-800/50; }
+.d-nav-btn.active { @apply tw-border-amber-400/30 tw-bg-amber-400/10; }
+.d-refresh, .d-logout, button { @apply focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-signal/40 focus:tw-ring-offset-2 focus:tw-ring-offset-ink; }
+.kpi-card, .chart-card, .section-card, .audit-card, .gateway-card, .gateway-callout,
+.insights-brief, .theme-card, .sentiment-card, .withdrawal-card { @apply tw-rounded-lg tw-border-line tw-bg-panel tw-shadow-panel; }
+.gateway-actions button, .gateway-active-pill, .gateway-ready-pill, .gateway-capabilities span { @apply tw-rounded-md; }
+.data-table-wrap, .commission-table-wrap { @apply tw-overflow-x-auto tw-rounded-lg tw-border tw-border-line; }
+@media (max-width: 768px) {
+  .d-title { @apply tw-text-2xl; }
+  .d-header-right { @apply tw-hidden; }
+  .d-body { @apply tw-space-y-5; }
 }
 </style>

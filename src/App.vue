@@ -46,6 +46,7 @@
 </template>
 
 <script>
+import './assets/styles/tailwind.css'
 import './assets/styles/global.css'
 import UserProfile from './components/UserProfile.vue'
 import PhotoLightbox from './components/PhotoLightbox.vue'

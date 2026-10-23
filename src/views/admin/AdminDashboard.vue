@@ -82,6 +82,7 @@
         <RecentWinsEditor    v-if="activeSection === 'recent-wins'" />
         <VipPackagesEditor   v-if="activeSection === 'vip-packages'" />
         <PaymentsOverview    v-if="activeSection === 'payments'" :focusSubscriptionId="focusSubId" @vue:unmounted="focusSubId = null" />
+        <WalletOverview      v-if="activeSection === 'wallet'" />
         <TestimonialsEditor  v-if="activeSection === 'testimonials'" />
         <UsersEditor         v-if="activeSection === 'users'" />
         <SupportInbox        v-if="activeSection === 'support'" />
@@ -98,6 +99,7 @@ import FootballTipsEditor  from '../../components/admin/FootballTipsEditor.vue'
 import RecentWinsEditor    from '../../components/admin/RecentWinsEditor.vue'
 import VipPackagesEditor   from '../../components/admin/VipPackagesEditor.vue'
 import PaymentsOverview    from '../../components/admin/PaymentsOverview.vue'
+import WalletOverview      from '../../components/admin/WalletOverview.vue'
 import TestimonialsEditor  from '../../components/admin/TestimonialsEditor.vue'
 import UsersEditor         from '../../components/admin/UsersEditor.vue'
 import SupportInbox        from '../../components/admin/SupportInbox.vue'
@@ -105,7 +107,7 @@ import SitePreview         from '../../components/admin/SitePreview.vue'
 
 export default {
   name: 'AdminDashboard',
-  components: { FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, TestimonialsEditor, UsersEditor, SupportInbox, SitePreview },
+  components: { FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, WalletOverview, TestimonialsEditor, UsersEditor, SupportInbox, SitePreview },
   directives: {
     'click-outside': {
       mounted(el, binding) {
@@ -126,6 +128,7 @@ export default {
         { id: 'recent-wins',   label: 'Recent Wins',        desc: 'Published wins' },
         { id: 'vip-packages',  label: 'VIP Packages',       desc: 'Pricing and betslips' },
         { id: 'payments',      label: 'Payments',           desc: 'Subscriptions and revenue' },
+        { id: 'wallet',        label: 'Wallet & Payouts',   desc: 'Balances and requests' },
         { id: 'users',         label: 'Members',            desc: 'Registered accounts' },
         { id: 'support',       label: 'Customer Chats',     desc: 'AI conversations and takeover' },
         { id: 'testimonials',  label: 'Testimonials',       desc: 'Social proof content' },
@@ -137,6 +140,7 @@ export default {
         'recent-wins':   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8m-4-4v4M5 3h14v5a7 7 0 01-14 0V3z"/><path d="M5 6H3a2 2 0 000 4h2M19 6h2a2 2 0 010 4h-2"/></svg>',
         'vip-packages':  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
         'payments':      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+        'wallet':        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7V5a2 2 0 00-2-2H5a3 3 0 000 6h15v10H5a3 3 0 010-6h15"/><circle cx="16" cy="14" r="1"/></svg>',
         'users':         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
         'support':       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/><path d="M8 9h8M8 13h5"/></svg>',
         'testimonials':  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
