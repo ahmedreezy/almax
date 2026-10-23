@@ -48,6 +48,7 @@ function buildPool () {
       is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
       special_price NUMERIC(12,2),
       special_odds  VARCHAR(50),
+      photo_url     VARCHAR(500) DEFAULT '',
       subscription_deadline VARCHAR(16),
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
@@ -176,6 +177,9 @@ describe('GET /api/groups — public', () => {
     expect(item).toHaveProperty('isSpecial')
     expect(item).toHaveProperty('isActive')
     expect(item).toHaveProperty('specialPrice')
+    expect(item).not.toHaveProperty('betslipLink')
+    expect(item).not.toHaveProperty('betslipCode')
+    expect(item).not.toHaveProperty('photoUrl')
   })
 
   // ── Verify each required package ─────────────────────────────────────────

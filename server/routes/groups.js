@@ -46,23 +46,26 @@ function requireAdmin(req, res, next) {
   next()
 }
 
-function formatGroup(g) {
-  return {
+function formatGroup(g, includePrivate = true) {
+  const payload = {
     id:                   g.id,
     name:                 g.name,
     oddsType:             g.odds_type,
     planType:             g.plan_type,
     price:                parseFloat(g.price),
-    betslipLink:          g.betslip_link  || '',
-    betslipCode:          g.betslip_code  || '',
     isSpecial:            g.is_special    || false,
     isActive:             g.is_active     !== false,
     specialPrice:         g.special_price != null ? parseFloat(g.special_price) : null,
     specialOdds:          g.special_odds  || null,
-    photoUrl:             g.photo_url     || '',
     subscriptionDeadline: g.subscription_deadline || null,
     isClosed:             isDeadlineClosed(g.subscription_deadline)
   }
+  if (includePrivate) {
+    payload.betslipLink = g.betslip_link || ''
+    payload.betslipCode = g.betslip_code || ''
+    payload.photoUrl = g.photo_url || ''
+  }
+  return payload
 }
 
 // GET all groups (public) — hides special groups that aren't active/priced today
@@ -76,7 +79,7 @@ router.get('/', async (_req, res) => {
       if (g.is_special) return g.special_price != null
       return true
     })
-    res.json(visible.map(formatGroup))
+    res.json(visible.map(g => formatGroup(g, false)))
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

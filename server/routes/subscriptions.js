@@ -142,9 +142,11 @@ function rowToSub (row, isAdmin = false) {
   if (isAdmin || row.status === 'active') {
     sub.betslipLink = row.betslip_link || ''
     sub.betslipCode = row.betslip_code || ''
+    sub.packagePhoto = row.group_photo_url || ''
   } else {
     sub.betslipLink = ''
     sub.betslipCode = ''
+    sub.packagePhoto = ''
   }
   return sub
 }
@@ -153,7 +155,8 @@ const SUB_SELECT = `
   SELECT s.*,
     u.username   AS user_name,   u.phone     AS user_phone,
     g.name       AS group_name,  g.odds_type AS group_odds_type,
-    g.plan_type  AS group_plan_type, g.price AS group_price
+    g.plan_type  AS group_plan_type, g.price AS group_price,
+    g.photo_url  AS group_photo_url
   FROM subscriptions s
   LEFT JOIN users  u ON u.id = s.user_id
   LEFT JOIN groups g ON g.id = s.group_id

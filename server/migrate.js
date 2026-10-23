@@ -182,6 +182,7 @@ async function migrate() {
         is_special    BOOLEAN       NOT NULL DEFAULT FALSE,
         is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
         special_price NUMERIC(12,2),
+        photo_url     VARCHAR(500) NOT NULL DEFAULT '',
         created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
         updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
       );
@@ -194,6 +195,7 @@ async function migrate() {
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS special_price NUMERIC(12,2);
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS special_odds  VARCHAR(50);
       ALTER TABLE groups ADD COLUMN IF NOT EXISTS subscription_deadline VARCHAR(16);
+      ALTER TABLE groups ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500) NOT NULL DEFAULT '';
       ALTER TABLE groups ALTER COLUMN subscription_deadline TYPE VARCHAR(16);
     `)
 

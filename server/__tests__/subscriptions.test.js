@@ -40,6 +40,7 @@ function buildMemPool () {
       is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
       special_price NUMERIC(12,2),
       special_odds  VARCHAR(50),
+      photo_url     VARCHAR(500) DEFAULT '',
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
     )
