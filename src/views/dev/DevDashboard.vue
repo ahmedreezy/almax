@@ -417,9 +417,9 @@
 
           <div class="kpi-grid" style="margin-top:14px">
             <div class="kpi-card">
-              <p class="kpi-label">Pending Commission</p>
-              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.pending?.amount ?? 0) }}</p>
-              <p class="kpi-sub">{{ formatNum(c.by_status?.pending?.count ?? 0) }} queued transfers</p>
+              <p class="kpi-label">Accrued Relworx Commission</p>
+              <p class="kpi-value kpi-value--md">{{ formatUGX(c.by_status?.accrued?.amount ?? 0) }}</p>
+              <p class="kpi-sub">{{ formatNum(c.by_status?.accrued?.count ?? 0) }} ledger credits</p>
             </div>
             <div class="kpi-card">
               <p class="kpi-label">Processing Commission</p>
@@ -796,7 +796,7 @@
         </div>
 
         <!-- ========== DEVELOPER WALLET ================================ -->
-        <DeveloperWallet v-if="activeSection === 'wallet'" />
+        <DeveloperWallet v-if="activeSection === 'wallet'" @updated="walletSummary = $event" />
 
         <!-- ========== PAYMENT GATEWAY ================================== -->
         <div v-if="activeSection === 'gateway'" class="gateway-panel">
@@ -883,6 +883,7 @@ export default {
       loading: true,
       error: '',
       analytics: null,
+      walletSummary: null,
       supportInsights: null,
       supportDays: 30,
       supportLoading: false,
@@ -960,8 +961,11 @@ export default {
     },
     currentCommission() {
       const available = this.c.available ?? this.c.current_total
-      if (available !== undefined && available !== null) return Number(available) || 0
-      return Math.max(0, Number(this.c.total_paid || 0) - Number(this.c.total_withdrawn || 0))
+      const legacyAvailable = available !== undefined && available !== null
+        ? Number(available) || 0
+        : Math.max(0, Number(this.c.total_paid || 0) - Number(this.c.total_withdrawn || 0))
+      const relworxAvailable = Number(this.walletSummary?.wallet?.by_provider?.relworx?.available || 0)
+      return legacyAvailable + relworxAvailable
     },
     u() { return this.analytics?.users || {} },
     s() { return this.analytics?.subscriptions || {} },
@@ -1016,9 +1020,15 @@ export default {
     }
   },
   async mounted() {
-    await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig()])
+    await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig(), this.fetchWalletSummary()])
   },
   methods: {
+    async fetchWalletSummary() {
+      try {
+        const { data } = await devApi.get('/api/developer/wallet')
+        this.walletSummary = data
+      } catch { /* The wallet section provides its own retry state. */ }
+    },
     async fetchGatewayConfig() {
       this.gatewayLoading = true
       this.gatewayError = ''

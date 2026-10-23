@@ -70,6 +70,7 @@ import devApi from '../../utils/devApi'
 
 export default {
   name: 'DeveloperWallet',
+  emits: ['updated'],
   data: () => ({ data: null, loading: true, saving: false, amount: '', error: '', notice: '' }),
   computed: {
     relworx() { return this.data?.wallet?.by_provider?.relworx || {} }
@@ -79,7 +80,10 @@ export default {
     async load() {
       this.loading = true
       this.error = ''
-      try { this.data = (await devApi.get('/api/developer/wallet')).data } catch (error) { this.error = error.response?.data?.message || 'Wallet data could not be loaded.' } finally { this.loading = false }
+      try {
+        this.data = (await devApi.get('/api/developer/wallet')).data
+        this.$emit('updated', this.data)
+      } catch (error) { this.error = error.response?.data?.message || 'Wallet data could not be loaded.' } finally { this.loading = false }
     },
     async requestPayout() {
       this.saving = true
