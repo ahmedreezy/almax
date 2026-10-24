@@ -333,12 +333,17 @@
           <template v-else-if="vipStep === 'payment-prompt'">
             <div class="mm-icon">📱</div>
             <h3 class="mm-title">PAY VIA <span class="gold-text">MOBILE MONEY</span></h3>
-            <p v-if="selectedGroup" class="mm-sub">{{ selectedGroup.name }} &mdash; {{ effectiveGroupPrice(selectedGroup).toLocaleString() }} UGX</p>
+            <p v-if="selectedGroup" class="mm-sub">{{ selectedGroup.name }} &mdash; {{ Number(paymentQuote?.totalCharge ?? effectiveGroupPrice(selectedGroup)).toLocaleString() }} UGX total</p>
 
             <div class="reg-form" style="text-align:left">
               <div class="field">
-                <label>Amount (UGX)</label>
-                <input :value="selectedGroup ? effectiveGroupPrice(selectedGroup).toLocaleString() : ''" type="text" readonly disabled style="opacity:0.7;cursor:not-allowed" />
+                <label>Payment breakdown (UGX)</label>
+                <div class="payment-breakdown" aria-live="polite">
+                  <div><span>Package price</span><strong>{{ Number(paymentQuote?.baseAmount ?? (selectedGroup ? effectiveGroupPrice(selectedGroup) : 0)).toLocaleString() }}</strong></div>
+                  <div v-if="Number(paymentQuote?.providerFee || 0) > 0"><span>Relworx processing fee</span><strong>{{ Number(paymentQuote.providerFee).toLocaleString() }}</strong></div>
+                  <div class="payment-breakdown__total"><span>Total charged</span><strong>{{ Number(paymentQuote?.totalCharge ?? (selectedGroup ? effectiveGroupPrice(selectedGroup) : 0)).toLocaleString() }}</strong></div>
+                </div>
+                <p v-if="quoteLoading" class="security-q-hint">Confirming the current payment total…</p>
               </div>
               <div class="field">
                 <label>Mobile Money Phone</label>
@@ -360,7 +365,7 @@
             </div>
 
             <p v-if="payError" class="reg-error">{{ payError }}</p>
-            <button class="mm-next-btn" :disabled="!selectedProvider || !payPhone || payLoading" @click="submitPayment">
+            <button class="mm-next-btn" :disabled="!selectedProvider || !payPhone || payLoading || quoteLoading || !paymentQuote" @click="submitPayment">
               {{ payLoading ? 'Sending request…' : '💳 Pay Now' }}
             </button>
             <p class="mm-back" @click="vipStep = 3">← Back</p>
@@ -391,7 +396,7 @@
             <button class="mm-next-btn" style="margin-top:8px;opacity:0.75" @click="openMySubscriptions">
               View My Subscriptions →
             </button>
-            <p class="mm-check-link" style="margin-top:14px;cursor:pointer;color:var(--gold);font-size:13px;text-decoration:underline"
+            <p v-if="processingGateway === 'jpesa'" class="mm-check-link" style="margin-top:14px;cursor:pointer;color:var(--gold);font-size:13px;text-decoration:underline"
                @click="vipStep = 'submit-txn'; txnInput = ''; txnError = ''">
               Already paid? Enter your mobile money transaction ID →
             </p>
@@ -444,7 +449,7 @@
                 <div v-for="alt in deadlineAlternatives" :key="alt.id"
                   class="pkg-row"
                   :class="{ 'pkg-row--selected': selectedGroup && selectedGroup.id === alt.id }"
-                  @click="selectedGroup = groups.find(g => g.id === alt.id) || alt; vipStep = 'payment-prompt'"
+                  @click="selectedGroup = groups.find(g => g.id === alt.id) || alt; toPaymentPromptStep()"
                   style="cursor:pointer">
                   <div class="pkg-meta">
                     <div class="pkg-name">{{ alt.name }}</div>
@@ -680,8 +685,11 @@ export default {
       payPhone: '',
       payError: '',
       payLoading: false,
+      paymentQuote: null,
+      quoteLoading: false,
       // Processing / polling
       processingSubId: null,
+      processingGateway: 'jpesa',
       pollCount: 0,
       pollError: '',
       pollSecondsLeft: 180,
@@ -993,6 +1001,7 @@ export default {
       this.selectedGroup    = null
       this.selectedProvider = ''
       this.payPhone         = ''
+      this.paymentQuote     = null
       this.vipStep          = 1
       this.showVipMenu      = true
       // Re-fetch packages each open so admin changes are immediately reflected
@@ -1012,8 +1021,10 @@ export default {
       this.selectedGroup    = null
       this.selectedProvider = ''
       this.payPhone         = ''
+      this.paymentQuote     = null
       this.txnInput         = ''
       this.txnError         = ''
+      this.processingGateway = 'jpesa'
       this.linkedGroupId    = null
       this.vipStep          = 1
       this.fetchGroups()
@@ -1082,9 +1093,21 @@ export default {
         this.vipStep = 3
       }
     },
-    toPaymentPromptStep() {
+    async toPaymentPromptStep() {
       this.payError = ''
       this.vipStep = 'payment-prompt'
+      this.quoteLoading = true
+      this.paymentQuote = null
+      try {
+        const { data } = await axios.get('/api/subscriptions/payment-quote', {
+          params: { groupId: this.selectedGroup.id }
+        })
+        this.paymentQuote = data
+      } catch (err) {
+        this.payError = this.getApiErrorMessage(err, 'Could not load the current payment total. Please try again.')
+      } finally {
+        this.quoteLoading = false
+      }
     },
     openForgot() {
       this.forgotSubStep   = 'phone'
@@ -1173,7 +1196,7 @@ export default {
       }
     },
     async submitPayment() {
-      if (!this.selectedProvider || !this.payPhone || !this.selectedGroup || !this.regUser) return
+      if (!this.selectedProvider || !this.payPhone || !this.selectedGroup || !this.regUser || !this.paymentQuote) return
       this.payLoading = true
       this.payError = ''
       try {
@@ -1183,7 +1206,9 @@ export default {
           paymentMethod: this.selectedProvider,
           phone:         this.payPhone
         })
+        if (data.quote) this.paymentQuote = data.quote
         this.processingSubId = data.subscription?.id || null
+        this.processingGateway = data.subscription?.payment?.provider || data.subscription?.paymentProvider || 'jpesa'
         this.pollCount = 0
         this.pollError = ''
         this.vipStep = 'processing'
@@ -1192,6 +1217,7 @@ export default {
         if (err.response?.status === 409 && err.response?.data?.existingSubscriptionId) {
           // Duplicate-submit guard on backend: continue watching the already pending request.
           this.processingSubId = err.response.data.existingSubscriptionId
+          this.processingGateway = err.response.data.paymentProvider || 'jpesa'
           this.pollCount = 0
           this.pollError = ''
           this.vipStep = 'processing'
@@ -1223,6 +1249,7 @@ export default {
         }
         try {
           const { data } = await axios.get('/api/subscriptions/' + this.processingSubId + '/payment-status')
+          this.processingGateway = data.subscription?.paymentProvider || this.processingGateway
           if (data.status === 'active') {
             this.stopPolling()
             this.activeSub = { ...this.normalizeSub(data.subscription), packagePhoto: this.selectedGroup?.photoUrl || data.subscription.packagePhoto || '' }
@@ -1805,6 +1832,11 @@ export default {
 }
 .field input:focus { border-color: rgba(255,215,0,0.5); }
 .field input::placeholder { color: var(--text-muted); opacity: 0.6; }
+.payment-breakdown { padding: 12px 14px; border: 1px solid rgba(255,215,0,0.2); border-radius: 8px; background: rgba(255,255,255,0.035); }
+.payment-breakdown > div { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 5px 0; color: var(--text-muted); font-size: 13px; }
+.payment-breakdown strong { color: #f3f4f6; font-variant-numeric: tabular-nums; }
+.payment-breakdown__total { margin-top: 5px; padding-top: 10px !important; border-top: 1px solid rgba(255,215,0,0.16); color: #fff !important; font-weight: 800; }
+.payment-breakdown__total strong { color: var(--gold); font-size: 16px; }
 .pw-wrap { position: relative; display: flex; }
 .pw-wrap input { flex: 1; padding-right: 44px !important; }
 .pw-eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; color: rgba(255,255,255,0.45); padding: 4px; line-height: 1; }
