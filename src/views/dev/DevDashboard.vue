@@ -1,13 +1,24 @@
 <template>
   <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200">
+    <button
+      v-if="mobileMenuOpen"
+      class="d-mobile-backdrop"
+      type="button"
+      aria-label="Close dashboard navigation"
+      @click="closeMobileMenu"
+    ></button>
+
     <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
-    <aside class="d-sidebar tw-border-line tw-bg-panel">
+    <aside id="developer-dashboard-nav" :class="['d-sidebar', 'tw-border-line', 'tw-bg-panel', { 'is-mobile-open': mobileMenuOpen }]">
       <div class="d-logo">
         <img class="d-mark" src="@/assets/almax-mark.png" alt="Almax logo" />
         <div>
           <div class="d-brand">ALMAX</div>
           <div class="d-brand-sub">DEV CONSOLE</div>
         </div>
+        <button class="d-mobile-close" type="button" aria-label="Close dashboard navigation" @click="closeMobileMenu">
+          <span></span><span></span>
+        </button>
       </div>
 
       <nav class="d-nav">
@@ -15,7 +26,7 @@
           v-for="item in navItems"
           :key="item.id"
           :class="['d-nav-btn', { active: activeSection === item.id }]"
-          @click="activeSection = item.id"
+          @click="selectSection(item.id)"
         >
           <span class="d-nav-icon" v-html="item.icon"></span>
           <span class="d-nav-copy">
@@ -40,16 +51,22 @@
     <!-- ── Main Panel ──────────────────────────────────────────────────── -->
     <main class="d-main tw-min-w-0 tw-bg-ink">
       <header class="d-header tw-border-line tw-bg-panel/95 tw-backdrop-blur">
-        <div>
-          <p class="d-kicker">Developer Analytics</p>
-          <h1 class="d-title">{{ currentSection.label }}</h1>
-          <p class="d-subtitle">{{ currentSection.desc }}</p>
-          <label class="tw-mt-3 tw-block md:tw-hidden">
-            <span class="tw-sr-only">Choose dashboard section</span>
-            <select v-model="activeSection" class="tw-w-full tw-rounded-md tw-border tw-border-line tw-bg-ink tw-px-3 tw-py-2 tw-text-sm tw-font-semibold tw-text-white tw-outline-none focus:tw-border-signal">
-              <option v-for="item in navItems" :key="'mobile-' + item.id" :value="item.id">{{ item.label }}</option>
-            </select>
-          </label>
+        <div class="d-header-intro">
+          <button
+            class="d-mobile-toggle"
+            type="button"
+            aria-label="Open dashboard navigation"
+            aria-controls="developer-dashboard-nav"
+            :aria-expanded="mobileMenuOpen"
+            @click="toggleMobileMenu"
+          >
+            <span></span><span></span><span></span>
+          </button>
+          <div>
+            <p class="d-kicker">Developer Analytics</p>
+            <h1 class="d-title">{{ currentSection.label }}</h1>
+            <p class="d-subtitle">{{ currentSection.desc }}</p>
+          </div>
         </div>
         <div class="d-header-right">
           <span class="d-date">{{ todayDate }}</span>
@@ -894,6 +911,7 @@ export default {
       gatewayTesting: '',
       gatewaySwitching: '',
       retryingCommission: {},
+      mobileMenuOpen: false,
       todayDate: d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
       navItems: [
         {
@@ -1020,9 +1038,37 @@ export default {
     }
   },
   async mounted() {
+    window.addEventListener('keydown', this.onKeydown)
+    window.addEventListener('resize', this.onViewportChange)
     await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig(), this.fetchWalletSummary()])
   },
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.onKeydown)
+    window.removeEventListener('resize', this.onViewportChange)
+    document.body.style.overflow = ''
+  },
   methods: {
+    selectSection(section) {
+      this.activeSection = section
+      this.closeMobileMenu()
+    },
+    toggleMobileMenu() {
+      this.mobileMenuOpen ? this.closeMobileMenu() : this.openMobileMenu()
+    },
+    openMobileMenu() {
+      this.mobileMenuOpen = true
+      document.body.style.overflow = 'hidden'
+    },
+    closeMobileMenu() {
+      this.mobileMenuOpen = false
+      document.body.style.overflow = ''
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape') this.closeMobileMenu()
+    },
+    onViewportChange() {
+      if (window.innerWidth > 768 && this.mobileMenuOpen) this.closeMobileMenu()
+    },
     async fetchWalletSummary() {
       try {
         const { data } = await devApi.get('/api/developer/wallet')
@@ -1238,6 +1284,9 @@ export default {
   z-index: 100;
   overflow-y: auto;
 }
+.d-mobile-toggle,
+.d-mobile-close,
+.d-mobile-backdrop { display: none; }
 
 .d-logo {
   display: flex;
@@ -1419,6 +1468,7 @@ export default {
   top: 0;
   z-index: 50;
 }
+.d-header-intro { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
 
 .d-kicker {
   font-size: 10px;
@@ -2439,11 +2489,60 @@ code {
 }
 
 @media (max-width: 768px) {
-  .d-sidebar      { display: none; }
+  .dev-dash       { display: block; min-height: 100dvh; overflow-x: hidden; }
+  .d-sidebar {
+    display: flex;
+    z-index: 1001;
+    width: min(86vw, 300px);
+    height: 100dvh;
+    transform: translateX(-105%);
+    transition: transform 0.24s ease;
+    box-shadow: 24px 0 70px rgba(0,0,0,0.55);
+  }
+  .d-sidebar.is-mobile-open { transform: translateX(0); }
+  .d-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(3,7,18,0.72);
+    backdrop-filter: blur(3px);
+  }
+  .d-mobile-toggle {
+    display: inline-flex;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(245,158,11,0.34);
+    border-radius: 8px;
+    background: rgba(245,158,11,0.1);
+  }
+  .d-mobile-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #f59e0b; }
+  .d-mobile-close {
+    display: block;
+    position: relative;
+    width: 36px;
+    height: 36px;
+    margin-left: auto;
+    flex: 0 0 36px;
+    border: 1px solid #253050;
+    border-radius: 7px;
+    background: #111b2b;
+  }
+  .d-mobile-close span { position: absolute; top: 16px; left: 9px; width: 16px; height: 2px; background: #9aa8bb; }
+  .d-mobile-close span:first-child { transform: rotate(45deg); }
+  .d-mobile-close span:last-child { transform: rotate(-45deg); }
   .d-main         { margin-left: 0; }
   .kpi-grid       { grid-template-columns: 1fr 1fr; }
   .d-body         { padding: 16px; }
-  .d-header       { padding: 16px; }
+  .d-header       { padding: 14px 16px; align-items: center; }
   .insights-toolbar { align-items: stretch; flex-direction: column; }
   .period-switcher { align-self: flex-start; }
   .insights-brief { grid-template-columns: 44px minmax(0, 1fr); }
