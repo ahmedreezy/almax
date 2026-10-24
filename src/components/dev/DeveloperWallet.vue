@@ -24,15 +24,16 @@
         <form class="tw-rounded-lg tw-border tw-border-line tw-bg-panel tw-p-5 tw-shadow-panel" @submit.prevent="requestPayout">
           <div class="tw-flex tw-items-center tw-justify-between tw-gap-3">
             <div>
-              <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-white">Request payout</h3>
+              <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-white">Send commission payout</h3>
             </div>
-            <span class="tw-rounded-full tw-bg-amber-400/10 tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-amber-300">Request only</span>
+            <span class="tw-rounded-full tw-bg-amber-400/10 tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-amber-300">{{ data.execution_mode === 'immediate' ? 'Live payout' : 'Request only' }}</span>
           </div>
           <label class="tw-mt-6 tw-block tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-400" for="developer-payout-amount">Amount (UGX)</label>
-          <input id="developer-payout-amount" v-model.number="amount" type="number" min="1" :max="wallet.available" required class="tw-mt-2 tw-w-full tw-rounded-md tw-border tw-border-line tw-bg-ink tw-px-3 tw-py-3 tw-text-base tw-text-white tw-outline-none focus:tw-border-signal focus:tw-ring-2 focus:tw-ring-signal/20" placeholder="Enter amount" />
+          <input id="developer-payout-amount" v-model.number="amount" type="number" :min="minimumPayout" :max="wallet.available" required class="tw-mt-2 tw-w-full tw-rounded-md tw-border tw-border-line tw-bg-ink tw-px-3 tw-py-3 tw-text-base tw-text-white tw-outline-none focus:tw-border-signal focus:tw-ring-2 focus:tw-ring-signal/20" placeholder="Enter amount" />
+          <p class="tw-mt-2 tw-text-xs tw-text-slate-500">Minimum Relworx payout: {{ money(minimumPayout) }}</p>
           <button type="button" class="tw-mt-2 tw-text-xs tw-font-semibold tw-text-signal hover:tw-text-amber-200" @click="amount = Math.floor(wallet.available || 0)">Use available balance</button>
-          <button type="submit" class="tw-mt-6 tw-w-full tw-rounded-md tw-bg-signal tw-px-4 tw-py-3 tw-text-sm tw-font-bold tw-text-ink hover:tw-bg-amber-300 disabled:tw-cursor-not-allowed disabled:tw-opacity-40" :disabled="saving || !data.destination_configured || !Number(amount)">
-            {{ saving ? 'Reserving…' : 'Request payout' }}
+          <button type="submit" class="tw-mt-6 tw-w-full tw-rounded-md tw-bg-signal tw-px-4 tw-py-3 tw-text-sm tw-font-bold tw-text-ink hover:tw-bg-amber-300 disabled:tw-cursor-not-allowed disabled:tw-opacity-40" :disabled="saving || !data.destination_configured || Number(amount) < minimumPayout">
+            {{ saving ? 'Sending…' : 'Send payout' }}
           </button>
           <p v-if="!data.destination_configured" class="tw-mt-3 tw-text-xs tw-text-red-300">PAYMENT_DEVELOPER_PAYOUT_MSISDN is not configured.</p>
           <p v-if="notice" class="tw-mt-3 tw-text-sm tw-text-emerald-300" role="status">{{ notice }}</p>
@@ -68,9 +69,10 @@ import devApi from '../../utils/devApi'
 export default {
   name: 'DeveloperWallet',
   emits: ['updated'],
-  data: () => ({ data: null, loading: true, saving: false, amount: '', error: '', notice: '' }),
+  data: () => ({ data: null, loading: true, saving: false, amount: '', requestToken: '', requestTokenAmount: null, error: '', notice: '' }),
   computed: {
-    wallet() { return this.data?.wallet || {} }
+    wallet() { return this.data?.wallet || {} },
+    minimumPayout() { return Number(this.data?.minimum_payout || 500) }
   },
   mounted() { this.load() },
   methods: {
@@ -83,13 +85,21 @@ export default {
       } catch (error) { this.error = error.response?.data?.message || 'Wallet data could not be loaded.' } finally { this.loading = false }
     },
     async requestPayout() {
+      const payoutAmount = Number(this.amount)
+      if (!window.confirm(`Send ${this.money(payoutAmount)} to the configured developer payout number now?`)) return
+      if (!this.requestToken || this.requestTokenAmount !== payoutAmount) {
+        this.requestToken = this.newRequestToken()
+        this.requestTokenAmount = payoutAmount
+      }
       this.saving = true
       this.error = ''
       this.notice = ''
       try {
-        const response = await devApi.post('/api/developer/payout-requests', { amount: Number(this.amount) })
+        const response = await devApi.post('/api/developer/payout-requests', { amount: payoutAmount, request_token: this.requestToken })
         this.notice = response.data.message
         this.amount = ''
+        this.requestToken = ''
+        this.requestTokenAmount = null
         await this.load()
       } catch (error) { this.error = error.response?.data?.errors?.amount?.[0] || error.response?.data?.message || 'Payout request could not be created.' } finally { this.saving = false }
     },
@@ -98,11 +108,14 @@ export default {
       try { await devApi.post(`/api/developer/payout-requests/${item.id}/cancel`); await this.load() } catch (error) { this.error = error.response?.data?.message || 'Payout request could not be cancelled.' }
     },
     money(value) { return `${Number(value || 0).toLocaleString()} UGX` },
+    newRequestToken() { return window.crypto?.randomUUID?.() || `payout-${Date.now()}-${Math.random().toString(36).slice(2)}` },
     date(value) { return value ? new Date(value).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' }) : '—' },
     statusClass(status) {
-      return status === 'pending'
-        ? 'tw-rounded-full tw-bg-amber-400/10 tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-bold tw-uppercase tw-tracking-wider tw-text-amber-300'
-        : 'tw-rounded-full tw-bg-slate-700 tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-bold tw-uppercase tw-text-slate-300'
+      const base = 'tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-bold tw-uppercase tw-tracking-wider '
+      if (status === 'completed') return base + 'tw-bg-emerald-400/10 tw-text-emerald-300'
+      if (status === 'failed') return base + 'tw-bg-red-500/10 tw-text-red-300'
+      if (status === 'processing' || status === 'pending') return base + 'tw-bg-amber-400/10 tw-text-amber-300'
+      return base + 'tw-bg-slate-700 tw-text-slate-300'
     }
   }
 }
