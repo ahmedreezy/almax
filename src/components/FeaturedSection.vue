@@ -493,6 +493,22 @@
                   <div class="betslip-badge">✅ ACTIVE VIP</div>
                 </template>
                 <p class="betslip-exp">Expires: {{ formatExpiry(activeSub.expiresAt) }}</p>
+                <div v-if="activeSub.receiptNumber || activeSub.paymentReference" class="payment-receipt">
+                  <div class="payment-receipt-head">
+                    <div>
+                      <span>Payment receipt</span>
+                      <strong>{{ activeSub.receiptNumber || activeSub.paymentReference }}</strong>
+                    </div>
+                    <span class="payment-receipt-status">PAID</span>
+                  </div>
+                  <div class="payment-receipt-meta">
+                    <span>{{ Number(activeSub.totalCharge || activeSub.amount || 0).toLocaleString() }} UGX</span>
+                    <span>{{ (activeSub.paymentMethod || 'Mobile Money').toUpperCase() }}</span>
+                  </div>
+                  <a v-if="activeSub.receiptUrl" :href="activeSub.receiptUrl" target="_blank" rel="noopener" class="payment-receipt-link">
+                    View full receipt →
+                  </a>
+                </div>
                 <div v-if="activeSub.betslipLink" class="betslip-section">
                   <div class="betslip-label">🔗 Betslip Link</div>
                   <a :href="activeSub.betslipLink" target="_blank" rel="noopener" class="betslip-link">{{ activeSub.betslipLink }}</a>
@@ -608,6 +624,7 @@ import { getUser, isLoggedIn, saveUser } from '../utils/userAuth'
 import { getApiBaseUrl } from '../utils/apiBase'
 
 const API = getApiBaseUrl()
+const PENDING_PAYMENT_KEY = 'almax-pending-subscription-id'
 
 const STATIC_PICKS = [
   {
@@ -780,15 +797,34 @@ export default {
   async mounted() {
     await Promise.all([this.fetchTips(), this.fetchVipConfig(), this.fetchGroups(), this.fetchMagicQuestion()])
     if (isLoggedIn()) this.fetchUserActiveSub()
+    const pendingSubId = Number(window.sessionStorage.getItem(PENDING_PAYMENT_KEY))
+    if (isLoggedIn() && Number.isInteger(pendingSubId) && pendingSubId > 0) {
+      this.processingSubId = pendingSubId
+      this.reconcilePaymentStatus()
+      this.startBackgroundPolling()
+    } else if (!isLoggedIn()) {
+      window.sessionStorage.removeItem(PENDING_PAYMENT_KEY)
+    }
     this._pollInterval = setInterval(this.fetchTips, 30000)
     this._groupPollInterval = setInterval(() => this.fetchGroups({ silent: true }), 30000)
     this._onVisible = () => {
       if (!document.hidden) {
         this.fetchTips()
         this.fetchGroups({ silent: true })
+        if (isLoggedIn()) this.fetchUserActiveSub()
+        if (this.processingSubId) this.reconcilePaymentStatus()
       }
     }
+    this._onFocus = () => {
+      if (isLoggedIn()) this.fetchUserActiveSub()
+      if (this.processingSubId) this.reconcilePaymentStatus()
+    }
+    this._onOnline = () => {
+      if (this.processingSubId) this.reconcilePaymentStatus()
+    }
     document.addEventListener('visibilitychange', this._onVisible)
+    window.addEventListener('focus', this._onFocus)
+    window.addEventListener('online', this._onOnline)
     this._onLogout  = () => this.handleForcedLogout()
     this._onLogin = (event) => this.handleUserLogin(event)
     this._onSubscriptionUpdated = () => this.handleSubscriptionUpdated()
@@ -811,8 +847,11 @@ export default {
     clearInterval(this._pollInterval)
     clearInterval(this._groupPollInterval)
     clearInterval(this._payPollInterval)
+    clearInterval(this._pendingPollInterval)
     clearInterval(this._pollCountdownInterval)
     document.removeEventListener('visibilitychange', this._onVisible)
+    window.removeEventListener('focus', this._onFocus)
+    window.removeEventListener('online', this._onOnline)
     window.removeEventListener('user-logged-out', this._onLogout)
     window.removeEventListener('user-logged-in', this._onLogin)
     window.removeEventListener('user-subscription-updated', this._onSubscriptionUpdated)
@@ -840,6 +879,11 @@ export default {
         planName:     s.planName     ?? null,
         planType:     s.planType     ?? s.plan_type     ?? '',
         oddsType:     s.oddsType     ?? s.odds_type     ?? '',
+        paymentMethod:    s.paymentMethod    ?? s.payment_method    ?? '',
+        paymentReference: s.paymentReference ?? s.payment_reference ?? '',
+        receiptNumber:    s.receiptNumber    ?? s.receipt_number    ?? '',
+        receiptUrl:       s.receiptUrl       ?? s.receipt_url       ?? '',
+        totalCharge:      s.totalCharge      ?? s.total_charge      ?? s.amount ?? 0,
       }
     },
     /**
@@ -971,8 +1015,11 @@ export default {
       this.activeSub = null
       this.activeSubs = []
       this.recoveryTickets = []
-      if (['payment-prompt', 'processing', 'deadline-closed'].includes(this.vipStep)) {
+      if (this.processingSubId) {
         this.stopPolling()
+        this.clearPendingPayment()
+      }
+      if (['payment-prompt', 'processing', 'deadline-closed'].includes(this.vipStep)) {
         this.vipStep = 3
       }
     },
@@ -1012,7 +1059,11 @@ export default {
       if (['payment-prompt', 'processing', 'payment-pending', 'submit-txn'].includes(this.vipStep)) {
         if (!confirm('Payment is in progress. Are you sure you want to close?')) return
       }
-      this.stopPolling()
+      if (this.processingSubId) {
+        this.startBackgroundPolling()
+      } else {
+        this.stopPolling()
+      }
       this.showVipMenu = false
     },
     /** Allow the user to subscribe to an additional package without closing the modal */
@@ -1070,10 +1121,7 @@ export default {
           { transactionId: txnId }
         )
         if (data.verified) {
-          this.activeSub = { ...this.normalizeSub(data.subscription), packagePhoto: this.selectedGroup?.photoUrl || data.subscription.packagePhoto || '' }
-          await this.fetchUserActiveSub()
-          this.notifySubscriptionUpdated(data.subscription)
-          this.vipStep = 'success'
+          this.handleConfirmedPayment(data.subscription)
         } else {
           this.txnError = data.message || 'Transaction could not be verified.'
         }
@@ -1209,6 +1257,7 @@ export default {
         })
         if (data.quote) this.paymentQuote = data.quote
         this.processingSubId = data.subscription?.id || null
+        this.rememberPendingPayment()
         this.processingGateway = data.subscription?.payment?.provider || data.subscription?.paymentProvider || 'jpesa'
         this.pollCount = 0
         this.pollError = ''
@@ -1218,6 +1267,7 @@ export default {
         if (err.response?.status === 409 && err.response?.data?.existingSubscriptionId) {
           // Duplicate-submit guard on backend: continue watching the already pending request.
           this.processingSubId = err.response.data.existingSubscriptionId
+          this.rememberPendingPayment()
           this.processingGateway = err.response.data.paymentProvider || 'jpesa'
           this.pollCount = 0
           this.pollError = ''
@@ -1237,33 +1287,72 @@ export default {
       }
     },
     startPolling() {
+      this.stopPolling()
       this.pollSecondsLeft = 180
       this._pollCountdownInterval = setInterval(() => {
         if (this.pollSecondsLeft > 0) this.pollSecondsLeft--
       }, 1000)
-      this._payPollInterval = setInterval(async () => {
+      this.reconcilePaymentStatus()
+      this._payPollInterval = setInterval(() => {
         this.pollCount++
         if (this.pollCount > 36) {  // 36 × 5s = 3 min
-          this.stopPolling()
+          clearInterval(this._payPollInterval)
+          this._payPollInterval = null
+          clearInterval(this._pollCountdownInterval)
+          this._pollCountdownInterval = null
           this.vipStep = 'payment-pending'
+          this.startBackgroundPolling()
           return
         }
-        try {
-          const { data } = await axios.get('/api/subscriptions/' + this.processingSubId + '/payment-status')
-          this.processingGateway = data.subscription?.paymentProvider || this.processingGateway
-          if (data.status === 'active') {
-            this.stopPolling()
-            this.activeSub = { ...this.normalizeSub(data.subscription), packagePhoto: this.selectedGroup?.photoUrl || data.subscription.packagePhoto || '' }
-            await this.fetchUserActiveSub()
-            this.notifySubscriptionUpdated(data.subscription)
-            this.vipStep = 'success'
-          } else if (data.status === 'failed') {
-            this.stopPolling()
-            this.pollError = 'Payment was not successful. Please try again.'
-          }
-          // still pending — keep polling
-        } catch { /* network hiccup — keep polling */ }
+        this.reconcilePaymentStatus()
       }, 5000)
+    },
+    startBackgroundPolling() {
+      if (!this.processingSubId || this._payPollInterval || this._pendingPollInterval) return
+      this._pendingPollInterval = setInterval(() => this.reconcilePaymentStatus(), 15000)
+    },
+    async reconcilePaymentStatus() {
+      if (!this.processingSubId || this._paymentCheckInFlight) return
+      this._paymentCheckInFlight = true
+      try {
+        const { data } = await axios.get('/api/subscriptions/' + this.processingSubId + '/payment-status')
+        this.processingGateway = data.subscription?.paymentProvider || this.processingGateway
+        if (data.status === 'active' && data.subscription) {
+          this.handleConfirmedPayment(data.subscription)
+        } else if (data.status === 'failed') {
+          this.stopPolling()
+          this.clearPendingPayment()
+          this.pollError = 'Payment was not successful. Please try again.'
+        }
+      } catch { /* A later poll, focus, visibility or online event will retry. */ }
+      finally {
+        this._paymentCheckInFlight = false
+      }
+    },
+    handleConfirmedPayment(subscription) {
+      const normalized = {
+        ...this.normalizeSub(subscription),
+        packagePhoto: this.selectedGroup?.photoUrl || subscription.packagePhoto || subscription.package_photo || ''
+      }
+      const upsert = list => [normalized, ...list.filter(sub => Number(sub.id) !== Number(normalized.id))]
+      this.activeSub = normalized
+      this.activeSubs = upsert(this.activeSubs)
+      this.userActiveSubs = upsert(this.userActiveSubs)
+      this.stopPolling()
+      this.clearPendingPayment()
+      this.vipStep = 'success'
+      this.showVipMenu = true
+      this.notifySubscriptionUpdated(normalized)
+      this.fetchUserActiveSub()
+    },
+    rememberPendingPayment() {
+      if (this.processingSubId) {
+        window.sessionStorage.setItem(PENDING_PAYMENT_KEY, String(this.processingSubId))
+      }
+    },
+    clearPendingPayment() {
+      window.sessionStorage.removeItem(PENDING_PAYMENT_KEY)
+      this.processingSubId = null
     },
     stopPolling() {
       if (this._payPollInterval) {
@@ -1273,6 +1362,10 @@ export default {
       if (this._pollCountdownInterval) {
         clearInterval(this._pollCountdownInterval)
         this._pollCountdownInterval = null
+      }
+      if (this._pendingPollInterval) {
+        clearInterval(this._pendingPollInterval)
+        this._pendingPollInterval = null
       }
     },
     async checkStatus() {
@@ -2009,6 +2102,15 @@ export default {
 .betslip-updated-badge { display: inline-block; background: rgba(79,195,247,0.15); color: #4fc3f7; border: 1px solid rgba(79,195,247,0.3); border-radius: 20px; font-size: 11px; font-weight: 700; padding: 3px 12px; margin-bottom: 8px; }
 .betslip-badge { background: rgba(0,200,83,0.15); color: #00c853; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px; display: inline-block; margin-bottom: 8px; }
 .betslip-exp { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
+.payment-receipt { margin: 0 0 16px; padding: 12px; border: 1px solid rgba(255,215,0,.2); border-radius: 10px; background: rgba(255,215,0,.055); }
+.payment-receipt-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.payment-receipt-head > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.payment-receipt-head span { color:var(--text-muted); font-size:10px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; }
+.payment-receipt-head strong { color:var(--white); font-family:monospace; font-size:12px; overflow-wrap:anywhere; }
+.payment-receipt-status { flex-shrink:0; padding:3px 8px; border-radius:999px; background:rgba(0,200,83,.15); color:#00c853!important; }
+.payment-receipt-meta { display:flex; justify-content:space-between; gap:12px; margin-top:10px; padding-top:9px; border-top:1px solid rgba(255,255,255,.07); color:var(--text-muted); font-size:11px; font-weight:700; }
+.payment-receipt-link { display:inline-block; margin-top:10px; color:var(--gold); font-size:12px; font-weight:800; text-decoration:none; }
+.payment-receipt-link:hover { text-decoration:underline; }
 .betslip-section { margin-bottom: 14px; }
 .betslip-label { font-size: 11px; font-weight: 700; color: #888; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
 .betslip-link { color: var(--gold); font-size: 12px; word-break: break-all; display: block; text-decoration: underline; }
