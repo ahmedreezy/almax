@@ -1,10 +1,21 @@
 <template>
   <div class="dashboard">
+    <button
+      v-if="mobileMenuOpen"
+      class="mobile-menu-backdrop"
+      type="button"
+      aria-label="Close dashboard navigation"
+      @click="closeMobileMenu"
+    ></button>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside id="admin-dashboard-nav" :class="['sidebar', { 'is-mobile-open': mobileMenuOpen }]">
       <div class="sidebar-logo">
         <img class="brand-mark" src="@/assets/almax-mark.png" alt="Almax logo" />
         <span class="logo-text">ALMAX<span>CONTROL</span></span>
+        <button class="mobile-menu-close" type="button" aria-label="Close dashboard navigation" @click="closeMobileMenu">
+          <span></span><span></span>
+        </button>
       </div>
       <p class="sidebar-role">Administration Suite</p>
 
@@ -13,7 +24,7 @@
           v-for="item in navItems"
           :key="item.id"
           :class="['nav-item', { active: activeSection === item.id }]"
-          @click="activeSection = item.id"
+          @click="selectSection(item.id)"
         >
           <span class="nav-icon" v-html="navIcons[item.id]"></span>
           <span class="nav-copy">
@@ -39,10 +50,22 @@
     <!-- Main content -->
     <main class="main-panel">
       <header class="main-header">
-        <div>
-          <p class="section-kicker">Control Center</p>
-          <h1 class="section-title">{{ currentSection.label }}</h1>
-          <p class="section-subtitle">{{ currentSection.desc }}</p>
+        <div class="header-intro">
+          <button
+            class="mobile-menu-toggle"
+            type="button"
+            aria-label="Open dashboard navigation"
+            aria-controls="admin-dashboard-nav"
+            :aria-expanded="mobileMenuOpen"
+            @click="toggleMobileMenu"
+          >
+            <span></span><span></span><span></span>
+          </button>
+          <div>
+            <p class="section-kicker">Control Center</p>
+            <h1 class="section-title">{{ currentSection.label }}</h1>
+            <p class="section-subtitle">{{ currentSection.desc }}</p>
+          </div>
         </div>
         <div class="header-right">
           <span class="header-date">{{ todayDate }}</span>
@@ -150,7 +173,8 @@ export default {
       unreadCount: 0,
       showNotifDropdown: false,
       notifPollInterval: null,
-      focusSubId: null
+      focusSubId: null,
+      mobileMenuOpen: false
     }
   },
   computed: {
@@ -159,13 +183,39 @@ export default {
     }
   },
   async mounted() {
+    window.addEventListener('keydown', this.onKeydown)
+    window.addEventListener('resize', this.onViewportChange)
     await this.fetchNotifCount()
     this.notifPollInterval = setInterval(this.fetchNotifCount, 30000)
   },
   beforeUnmount() {
     if (this.notifPollInterval) clearInterval(this.notifPollInterval)
+    window.removeEventListener('keydown', this.onKeydown)
+    window.removeEventListener('resize', this.onViewportChange)
+    document.body.style.overflow = ''
   },
   methods: {
+    selectSection(section) {
+      this.activeSection = section
+      this.closeMobileMenu()
+    },
+    toggleMobileMenu() {
+      this.mobileMenuOpen ? this.closeMobileMenu() : this.openMobileMenu()
+    },
+    openMobileMenu() {
+      this.mobileMenuOpen = true
+      document.body.style.overflow = 'hidden'
+    },
+    closeMobileMenu() {
+      this.mobileMenuOpen = false
+      document.body.style.overflow = ''
+    },
+    onKeydown(event) {
+      if (event.key === 'Escape') this.closeMobileMenu()
+    },
+    onViewportChange() {
+      if (window.innerWidth > 768 && this.mobileMenuOpen) this.closeMobileMenu()
+    },
     logout() {
       localStorage.removeItem('adminToken')
       this.$router.push('/admin/login')
@@ -257,6 +307,9 @@ export default {
   flex-direction: column;
   padding: 30px 18px 24px;
 }
+.mobile-menu-toggle,
+.mobile-menu-close,
+.mobile-menu-backdrop { display: none; }
 @media (min-width: 769px) {
   .sidebar { height: 100vh; overflow-y: auto; }
 }
@@ -398,6 +451,7 @@ export default {
   background: rgba(20,20,20,0.82);
   backdrop-filter: blur(12px);
 }
+.header-intro { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .section-kicker {
   color: #FFD700;
   font-size: 11px;
@@ -536,23 +590,68 @@ export default {
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .dashboard { flex-direction: column; }
+  .dashboard { display: block; min-height: 100dvh; overflow-x: hidden; }
   .sidebar {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 12px;
-    gap: 6px;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 1001;
+    width: min(86vw, 320px);
+    height: 100dvh;
+    padding: 22px 16px 20px;
+    overflow-y: auto;
+    transform: translateX(-105%);
+    transition: transform 0.24s ease;
+    box-shadow: 24px 0 70px rgba(0,0,0,0.5);
   }
-  .sidebar-logo, .sidebar-role, .admin-strip { display: none; }
-  .sidebar-nav { flex-direction: row; flex: unset; }
-  .logout-btn { margin-top: 0; padding: 10px 12px; font-size: 12px; }
-  .nav-label, .nav-desc { display: none; }
-  .nav-item { padding: 10px; }
-  .nav-icon { width: auto; height: auto; background: none; }
+  .sidebar.is-mobile-open { transform: translateX(0); }
+  .sidebar-logo { padding-right: 2px; }
+  .mobile-menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(0,0,0,0.68);
+    backdrop-filter: blur(3px);
+  }
+  .mobile-menu-toggle {
+    display: inline-flex;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(255,215,0,0.28);
+    border-radius: 11px;
+    background: rgba(255,215,0,0.08);
+  }
+  .mobile-menu-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #FFD700; }
+  .mobile-menu-close {
+    display: block;
+    position: relative;
+    width: 38px;
+    height: 38px;
+    margin-left: auto;
+    flex: 0 0 38px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+  }
+  .mobile-menu-close span { position: absolute; top: 18px; left: 10px; width: 16px; height: 2px; background: rgba(255,255,255,0.75); }
+  .mobile-menu-close span:first-child { transform: rotate(45deg); }
+  .mobile-menu-close span:last-child { transform: rotate(-45deg); }
+  .sidebar-nav { flex: 1; }
+  .nav-item { width: 100%; }
+  .main-panel { width: 100%; min-width: 0; overflow: visible; }
   .panel-body { padding: 16px; }
-  .main-header { padding: 16px; }
+  .main-header { position: sticky; top: 0; z-index: 50; padding: 14px 16px; gap: 12px; }
   .section-subtitle, .section-kicker, .header-date { display: none; }
+  .section-title { font-size: 20px; }
+  .header-right { gap: 8px; }
   .notif-dropdown { right: -8px; width: min(320px, calc(100vw - 32px)); }
 }
 </style>
