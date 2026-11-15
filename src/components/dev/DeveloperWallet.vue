@@ -5,7 +5,7 @@
         <p class="tw-m-0 tw-text-xs tw-font-bold tw-uppercase tw-tracking-[0.18em] tw-text-signal">Relworx</p>
         <h2 id="developer-wallet-title" class="tw-mt-2 tw-text-2xl tw-font-semibold tw-text-white">Wallet & payouts</h2>
       </div>
-      <button type="button" class="wallet-refresh tw-rounded-md tw-bg-panel tw-px-4 tw-py-2.5 tw-text-sm tw-font-semibold tw-text-slate-200 hover:tw-text-white disabled:tw-opacity-50" :disabled="loading" @click="load">
+      <button type="button" class="wallet-refresh tw-rounded-md tw-bg-panel tw-px-4 tw-py-2.5 tw-text-sm tw-font-semibold tw-text-slate-200 hover:tw-text-white disabled:tw-opacity-50" :disabled="loading" @click="load()">
         {{ loading ? 'Refreshing…' : 'Refresh wallet' }}
       </button>
     </div>
@@ -49,7 +49,7 @@
               <div>
                 <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
                   <strong class="tw-text-sm tw-text-white">{{ money(item.amount) }}</strong>
-                  <span :class="statusClass(item.status)">{{ item.status }}</span>
+                  <span :class="statusClass(item.display_status || item.status)">{{ item.display_status || item.status }}</span>
                 </div>
                 <p class="tw-mt-1 tw-text-xs tw-text-slate-500">{{ item.reference }} · {{ date(item.created_at) }} · {{ item.destination }}</p>
                 <p v-if="item.message" class="tw-mt-2 tw-text-xs tw-text-blue-200">{{ item.message }}</p>
@@ -69,20 +69,37 @@ import devApi from '../../utils/devApi'
 export default {
   name: 'DeveloperWallet',
   emits: ['updated'],
-  data: () => ({ data: null, loading: true, saving: false, amount: '', requestToken: '', requestTokenAmount: null, error: '', notice: '' }),
+  data: () => ({ data: null, loading: true, saving: false, amount: '', requestToken: '', requestTokenAmount: null, error: '', notice: '', payoutPollTimer: null, pollRequestInFlight: false }),
   computed: {
     wallet() { return this.data?.wallet || {} },
     minimumPayout() { return Number(this.data?.minimum_payout || 500) }
   },
   mounted() { this.load() },
+  beforeUnmount() { this.stopPayoutPolling() },
   methods: {
-    async load() {
-      this.loading = true
-      this.error = ''
+    async load(silent = false) {
+      if (silent && this.pollRequestInFlight) return
+      if (silent) this.pollRequestInFlight = true
+      else { this.loading = true; this.error = '' }
       try {
         this.data = (await devApi.get('/api/developer/wallet')).data
         this.$emit('updated', this.data)
-      } catch (error) { this.error = error.response?.data?.message || 'Wallet data could not be loaded.' } finally { this.loading = false }
+        this.syncPayoutPolling()
+      } catch (error) {
+        if (!silent) this.error = error.response?.data?.message || 'Wallet data could not be loaded.'
+      } finally {
+        if (silent) this.pollRequestInFlight = false
+        else this.loading = false
+      }
+    },
+    syncPayoutPolling() {
+      const hasActivePayout = (this.data?.requests || []).some(item => item.status === 'processing' && !item.is_delayed)
+      if (hasActivePayout && !this.payoutPollTimer) this.payoutPollTimer = window.setInterval(() => this.load(true), 15000)
+      if (!hasActivePayout) this.stopPayoutPolling()
+    },
+    stopPayoutPolling() {
+      if (this.payoutPollTimer) window.clearInterval(this.payoutPollTimer)
+      this.payoutPollTimer = null
     },
     async requestPayout() {
       const payoutAmount = Number(this.amount)
@@ -114,6 +131,7 @@ export default {
       const base = 'tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-bold tw-uppercase tw-tracking-wider '
       if (status === 'completed') return base + 'tw-bg-emerald-400/10 tw-text-emerald-300'
       if (status === 'failed') return base + 'tw-bg-red-500/10 tw-text-red-300'
+      if (status === 'delayed') return base + 'tw-bg-amber-400/10 tw-text-amber-300'
       if (status === 'processing' || status === 'pending') return base + 'tw-bg-blue-400/10 tw-text-blue-200'
       return base + 'tw-bg-slate-700 tw-text-slate-300'
     }
