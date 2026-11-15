@@ -106,7 +106,7 @@ export default {
   gap: 6px;
   padding: 8px 16px;
   border-radius: 10px;
-  border: 1px solid rgba(255,215,0,0.15);
+  border: 1px solid rgba(143,179,217,0.15);
   background: transparent;
   color: var(--text-muted, #aaa);
   font-size: 13px;
@@ -115,13 +115,13 @@ export default {
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .device-btn:hover {
-  background: rgba(255,215,0,0.06);
+  background: rgba(143,179,217,0.06);
   color: #fff;
 }
 .device-btn.active {
-  background: rgba(255,215,0,0.14);
-  color: #FFD700;
-  border-color: rgba(255,215,0,0.45);
+  background: rgba(143,179,217,0.14);
+  color: #8FB3D9;
+  border-color: rgba(143,179,217,0.45);
 }
 .device-icon { font-size: 16px; }
 .device-size {
@@ -135,15 +135,15 @@ export default {
 .bar-spacer { flex: 1; }
 .open-link {
   font-size: 13px;
-  color: #FFD700;
+  color: #8FB3D9;
   text-decoration: none;
   font-weight: 700;
   padding: 8px 14px;
-  border: 1px solid rgba(255,215,0,0.2);
+  border: 1px solid rgba(143,179,217,0.2);
   border-radius: 10px;
   transition: background 0.2s;
 }
-.open-link:hover { background: rgba(255,215,0,0.08); }
+.open-link:hover { background: rgba(143,179,217,0.08); }
 
 /* ── Frame Wrapper ── */
 .frame-wrap {
@@ -152,7 +152,7 @@ export default {
   justify-content: center;
   overflow: hidden;
   border-radius: 14px;
-  border: 1px solid rgba(255,215,0,0.1);
+  border: 1px solid rgba(143,179,217,0.1);
   background: #0d0d0d;
   padding: 10px;
 }

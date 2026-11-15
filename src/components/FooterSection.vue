@@ -78,7 +78,7 @@ export default {
 }
 </script>
 
-<style scoped>
+-<style scoped>
 .footer {
   background: var(--dark-2);
 }

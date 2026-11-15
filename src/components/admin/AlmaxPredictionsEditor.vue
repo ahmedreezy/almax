@@ -193,7 +193,7 @@ export default {
         const idx = this.predictions.findIndex(p => p.id === id)
         if (idx !== -1) this.predictions.splice(idx, 1, data)
       } catch {
-        alert('Update failed. Make sure the server is running.')
+        this.saveError = 'The prediction result could not be updated.'
       }
     },
     async deletePrediction(id) {
@@ -202,7 +202,7 @@ export default {
         await adminApi.delete('/api/almax-predictions/' + id)
         this.predictions = this.predictions.filter(p => p.id !== id)
       } catch {
-        alert('Delete failed. Make sure the server is running.')
+        this.saveError = 'The prediction could not be deleted.'
       }
     },
     startEdit(pred) {
@@ -223,7 +223,6 @@ export default {
         if (idx !== -1) this.predictions.splice(idx, 1, data)
         this.cancelEdit()
       } catch (err) {
-        console.error('[AlmaxEdit] save failed:', err?.response?.status, err?.response?.data, err?.message)
         const status = err?.response?.status
         const msg = err?.response?.data?.error || err?.message || 'Unknown error'
         if (status === 401) {
@@ -249,14 +248,14 @@ export default {
 .state-msg { padding: 14px 18px; border-radius: 10px; background: #1a1a1a; font-size: 14px; color: #888; margin-bottom: 24px; }
 .empty-state { padding: 20px; text-align: center; color: #555; font-size: 14px; background: #111; border-radius: 10px; margin-bottom: 24px; }
 
-.list { background: #111; border: 1px solid rgba(255,215,0,0.1); border-radius: 14px; overflow: hidden; margin-bottom: 32px; }
+.list { background: #111; border: 1px solid rgba(143,179,217,0.1); border-radius: 14px; overflow: hidden; margin-bottom: 32px; }
 .pred-row { border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; gap: 12px; flex-wrap: wrap; }
 .pred-row:last-child { border-bottom: none; }
 .pred-row.editing { display: block; padding: 0; }
 .pred-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .pred-match { font-size: 14px; font-weight: 700; color: #fff; }
 .pred-comp { font-size: 12px; color: #666; }
-.pred-tip { font-size: 12px; color: #FFD700; opacity: 0.85; margin-top: 2px; }
+.pred-tip { font-size: 12px; color: #8FB3D9; opacity: 0.85; margin-top: 2px; }
 .pred-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
 .result-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
@@ -264,10 +263,10 @@ export default {
 .result-won { background: rgba(76,175,80,0.15); color: #4CAF50; }
 .result-lost { background: rgba(244,67,54,0.15); color: #F44336; }
 
-.result-select { background: #1a1a1a; border: 1px solid rgba(255,215,0,0.2); border-radius: 7px; color: #fff; font-size: 12px; padding: 5px 8px; cursor: pointer; outline: none; }
+.result-select { background: #1a1a1a; border: 1px solid rgba(143,179,217,0.2); border-radius: 7px; color: #fff; font-size: 12px; padding: 5px 8px; cursor: pointer; outline: none; }
 
-.edit-btn { background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.2); color: #FFD700; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-.edit-btn:hover { background: rgba(255,215,0,0.16); }
+.edit-btn { background: rgba(143,179,217,0.08); border: 1px solid rgba(143,179,217,0.2); color: #8FB3D9; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+.edit-btn:hover { background: rgba(143,179,217,0.16); }
 .delete-btn { background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.2); color: #ff5252; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
 .delete-btn:hover { background: rgba(255,82,82,0.18); }
 
@@ -277,29 +276,29 @@ export default {
 .edit-field { display: flex; flex-direction: column; gap: 4px; }
 .edit-field.span2 { grid-column: 1 / -1; }
 .edit-field label { font-size: 10px; font-weight: 700; color: #888; letter-spacing: 1px; text-transform: uppercase; }
-.edit-field input { background: #111; border: 1px solid rgba(255,215,0,0.15); border-radius: 7px; padding: 8px 10px; color: #fff; font-size: 13px; outline: none; transition: border-color 0.2s; }
-.edit-field input:focus { border-color: rgba(255,215,0,0.45); }
+.edit-field input { background: #111; border: 1px solid rgba(143,179,217,0.15); border-radius: 7px; padding: 8px 10px; color: #fff; font-size: 13px; outline: none; transition: border-color 0.2s; }
+.edit-field input:focus { border-color: rgba(143,179,217,0.45); }
 .edit-field input::placeholder { color: #444; }
-.edit-field select { background: #111; border: 1px solid rgba(255,215,0,0.15); border-radius: 7px; padding: 8px 10px; color: #fff; font-size: 13px; outline: none; cursor: pointer; }
+.edit-field select { background: #111; border: 1px solid rgba(143,179,217,0.15); border-radius: 7px; padding: 8px 10px; color: #fff; font-size: 13px; outline: none; cursor: pointer; }
 .edit-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.save-inline-btn { background: linear-gradient(135deg,#FFD700,#FFA500); color: #000; border: none; border-radius: 7px; padding: 8px 16px; font-size: 12px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+.save-inline-btn { background: linear-gradient(135deg,#8FB3D9,#FFA500); color: #000; border: none; border-radius: 7px; padding: 8px 16px; font-size: 12px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
 .save-inline-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cancel-edit-btn { background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 7px; padding: 8px 14px; color: #aaa; font-size: 12px; cursor: pointer; transition: border-color 0.2s; }
 .cancel-edit-btn:hover { border-color: rgba(255,255,255,0.35); color: #fff; }
 
 .add-title { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 16px; }
 
-.editor-form { background: #111; border: 1px solid rgba(255,215,0,0.1); border-radius: 14px; padding: 24px; }
+.editor-form { background: #111; border: 1px solid rgba(143,179,217,0.1); border-radius: 14px; padding: 24px; }
 .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field label { font-size: 11px; font-weight: 700; color: #888; letter-spacing: 1px; text-transform: uppercase; }
-.field input[type="text"] { background: #1a1a1a; border: 1px solid rgba(255,215,0,0.15); border-radius: 8px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s; }
-.field input:focus { border-color: rgba(255,215,0,0.45); }
+.field input[type="text"] { background: #1a1a1a; border: 1px solid rgba(143,179,217,0.15); border-radius: 8px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s; }
+.field input:focus { border-color: rgba(143,179,217,0.45); }
 .field input::placeholder { color: #444; }
-.result-select-form { background: #1a1a1a; border: 1px solid rgba(255,215,0,0.15); border-radius: 8px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; cursor: pointer; }
+.result-select-form { background: #1a1a1a; border: 1px solid rgba(143,179,217,0.15); border-radius: 8px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; cursor: pointer; }
 
 .form-actions { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
-.save-btn { background: linear-gradient(135deg,#FFD700,#FFA500); color: #000; border: none; border-radius: 9px; padding: 12px 28px; font-size: 14px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+.save-btn { background: linear-gradient(135deg,#8FB3D9,#FFA500); color: #000; border: none; border-radius: 9px; padding: 12px 28px; font-size: 14px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
 .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .saved-msg { color: #4caf50; font-size: 13px; font-weight: 600; }
 .error-msg { color: #ff5252; font-size: 13px; }

@@ -1,9 +1,9 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomePage from '../views/HomePage.vue'
 import AdminLogin from '../views/admin/AdminLogin.vue'
-import AdminDashboard from '../views/admin/AdminDashboard.vue'
 import DevLogin from '../views/dev/DevLogin.vue'
-import DevDashboard from '../views/dev/DevDashboard.vue'
+import { enableDevPreview, isDevPreviewAvailable, isDevPreviewEnabled } from '../utils/devPreviewMode'
+import { enableAdminPreview, isAdminPreviewAvailable, isAdminPreviewEnabled } from '../utils/adminPreviewMode'
 
 const routes = [
   {
@@ -11,10 +11,20 @@ const routes = [
     component: HomePage
   },
   {
+    path: '/admin/preview',
+    component: AdminLogin,
+    beforeEnter: (to, from, next) => {
+      if (!isAdminPreviewAvailable()) { next('/admin/login'); return }
+      localStorage.removeItem('adminToken')
+      enableAdminPreview()
+      next({ path: '/admin/dashboard', query: to.query })
+    }
+  },
+  {
     path: '/admin/login',
     component: AdminLogin,
     beforeEnter: (to, from, next) => {
-      if (localStorage.getItem('adminToken')) {
+      if (localStorage.getItem('adminToken') || isAdminPreviewEnabled()) {
         next('/admin/dashboard')
       } else {
         next()
@@ -23,9 +33,9 @@ const routes = [
   },
   {
     path: '/admin/dashboard',
-    component: AdminDashboard,
+    component: () => import(/* webpackChunkName: "owner-dashboard" */ '../views/admin/AdminDashboard.vue'),
     beforeEnter: (to, from, next) => {
-      if (localStorage.getItem('adminToken')) {
+      if (localStorage.getItem('adminToken') || isAdminPreviewEnabled()) {
         next()
       } else {
         next('/admin/login')
@@ -38,10 +48,23 @@ const routes = [
   },
   // ── Developer portal ─────────────────────────────────────────────────────
   {
+    path: '/dev/preview',
+    component: DevLogin,
+    beforeEnter: (to, from, next) => {
+      if (!isDevPreviewAvailable()) {
+        next('/dev/login')
+        return
+      }
+      localStorage.removeItem('devToken')
+      enableDevPreview()
+      next('/dev/dashboard')
+    }
+  },
+  {
     path: '/dev/login',
     component: DevLogin,
     beforeEnter: (to, from, next) => {
-      if (localStorage.getItem('devToken')) {
+      if (localStorage.getItem('devToken') || isDevPreviewEnabled()) {
         next('/dev/dashboard')
       } else {
         next()
@@ -50,9 +73,9 @@ const routes = [
   },
   {
     path: '/dev/dashboard',
-    component: DevDashboard,
+    component: () => import(/* webpackChunkName: "developer-dashboard" */ '../views/dev/DevDashboard.vue'),
     beforeEnter: (to, from, next) => {
-      if (localStorage.getItem('devToken')) {
+      if (localStorage.getItem('devToken') || isDevPreviewEnabled()) {
         next()
       } else {
         next('/dev/login')

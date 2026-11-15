@@ -45,7 +45,7 @@
     <Teleport to="body">
       <transition name="up-modal">
         <div v-if="showAuthModal" class="up-overlay" @click.self="closeAuth" role="dialog" aria-modal="true" aria-label="Account">
-          <div class="up-modal">
+          <div ref="authDialog" class="up-modal" tabindex="-1">
             <button class="up-close" @click="closeAuth" aria-label="Close">✕</button>
             <div class="up-modal-header">
               <div class="up-modal-icon">👤</div>
@@ -142,6 +142,7 @@ export default {
       showRegPw: false,
       showConfirmPw: false,
       showLoginPw: false,
+      lastFocusedElement: null,
     }
   },
   computed: {
@@ -209,7 +210,27 @@ export default {
       }
     },
     handleKeyDown(e) {
-      if (e.key === 'Escape' && this.showAuthModal) this.closeAuth()
+      if (!this.showAuthModal) return
+      if (e.key === 'Escape') {
+        this.closeAuth()
+        return
+      }
+      if (e.key !== 'Tab' || !this.$refs.authDialog) return
+      const focusable = [...this.$refs.authDialog.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) {
+        e.preventDefault()
+        this.$refs.authDialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     },
     handleAuthChanged(event) {
       const user = event.detail?.user || getUser()
@@ -230,14 +251,17 @@ export default {
     },
     openAuth() {
       this.authError = ''
+      this.lastFocusedElement = document.activeElement
       this.showAuthModal = true
       document.body.style.overflow = 'hidden'
       this.loadMagicQuestion()
+      this.$nextTick(() => this.$refs.authDialog?.focus())
     },
     closeAuth() {
       this.showAuthModal = false
       this.authError = ''
       document.body.style.overflow = ''
+      this.$nextTick(() => this.lastFocusedElement?.focus?.())
       // Reset forms
       this.regForm = { username: '', phone: '', password: '', confirmPassword: '', securityAnswer: '' }
       this.loginForm = { phone: '', password: '' }

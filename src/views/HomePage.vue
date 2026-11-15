@@ -2,10 +2,10 @@
   <div id="home-page">
     <div :class="{ 'main-blurred': showModal || showVideoAd }">
       <HeroSection />
-      <FeaturedSection :openVip="triggerVip" @vipOpened="triggerVip = false" />
-      <RecentWinnings />
-      <TestimonialsSection />
-      <FooterSection />
+      <FeaturedSection class="reveal-section" :openVip="triggerVip" @vipOpened="triggerVip = false" />
+      <RecentWinnings class="reveal-section" />
+      <TestimonialsSection class="reveal-section" />
+      <FooterSection class="reveal-section" />
     </div>
 
     <VideoAdModal
@@ -52,8 +52,26 @@ export default {
     return {
       showVideoAd: false,
       showModal: false,
-      triggerVip: false
+      triggerVip: false,
+      sectionObserver: null
     }
+  },
+  mounted() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+      document.querySelectorAll('.reveal-section').forEach(section => section.classList.add('is-visible'))
+      return
+    }
+    this.sectionObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.add('is-visible')
+        this.sectionObserver?.unobserve(entry.target)
+      })
+    }, { threshold: 0.08, rootMargin: '0px 0px -6% 0px' })
+    this.$nextTick(() => document.querySelectorAll('.reveal-section').forEach(section => this.sectionObserver.observe(section)))
+  },
+  beforeUnmount() {
+    this.sectionObserver?.disconnect()
   },
   methods: {
     openWidget() {

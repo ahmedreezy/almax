@@ -1,5 +1,5 @@
 <template>
-  <section class="hero">
+  <section class="hero" id="top">
     <!-- Animated floating background icons -->
     <div class="bg-icons" aria-hidden="true">
       <span
@@ -14,7 +14,7 @@
       <div class="hero-badge">🏆 ALMAX FOOTBALL PREDICTIONS</div>
       <div class="glow-wrapper">
         <figure class="glow-figure">
-          <div class="glow-layer" v-for="n in 10" :key="n">ALMAX FOOTBALL PREDICTIONS</div>
+          <div class="glow-layer" v-for="n in 4" :key="n">ALMAX FOOTBALL PREDICTIONS</div>
         </figure>
       </div>
 
@@ -24,6 +24,10 @@
       <p class="hero-sub">
         Daily free tips, live scores &amp; VIP winnings — powered by Almax.
       </p>
+      <div class="hero-actions">
+        <a class="hero-primary" href="#featured">View today’s picks <span aria-hidden="true">↓</span></a>
+        <a class="hero-secondary" href="#winnings">See verified winnings</a>
+      </div>
       <div class="hero-stats">
         <div class="stat">
           <span class="stat-num">94%</span>
@@ -58,12 +62,6 @@ export default {
         { id: 4,  char: '🎰', style: { top: '75%',  left: '85%',  animationDelay: '0.5s',  fontSize: '38px' } },
         { id: 5,  char: '₿',  style: { top: '40%',  left: '90%',  animationDelay: '1.5s',  fontSize: '32px', color: '#F7931A' } },
         { id: 6,  char: '🃏', style: { top: '85%',  left: '30%',  animationDelay: '2.5s',  fontSize: '36px' } },
-        { id: 7,  char: '🏅', style: { top: '15%',  left: '50%',  animationDelay: '3s',    fontSize: '28px' } },
-        { id: 8,  char: '💎', style: { top: '50%',  left: '3%',   animationDelay: '1.2s',  fontSize: '34px' } },
-        { id: 9,  char: '🎯', style: { top: '30%',  left: '70%',  animationDelay: '0.8s',  fontSize: '30px' } },
-        { id: 10, char: '🤑', style: { top: '70%',  left: '60%',  animationDelay: '2.2s',  fontSize: '38px' } },
-        { id: 11, char: '🏟', style: { top: '5%',   left: '35%',  animationDelay: '1.7s',  fontSize: '32px' } },
-        { id: 12, char: '💵', style: { top: '90%',  left: '70%',  animationDelay: '0.3s',  fontSize: '28px' } },
       ]
     }
   },
@@ -209,6 +207,12 @@ export default {
   margin-bottom: 44px;
   line-height: 1.7;
 }
+.hero-actions { display: flex; align-items: center; justify-content: center; gap: 12px; margin: -18px 0 34px; }
+.hero-actions a { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 18px; border-radius: 10px; font-size: 12px; font-weight: 780; text-decoration: none; transition: transform .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+.hero-primary { border: 1px solid transparent; background: var(--gold); color: #17140b; }
+.hero-secondary { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.045); color: var(--white); }
+.hero-actions a:hover { transform: translateY(-2px); }
+.hero-actions a:active { transform: translateY(0) scale(.98); }
 
 /* Stats row */
 .hero-stats {

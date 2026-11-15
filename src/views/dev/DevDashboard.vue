@@ -1,5 +1,5 @@
 <template>
-  <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200">
+  <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200" @pointermove="onDashboardPointerMove">
     <button
       v-if="mobileMenuOpen"
       class="d-mobile-backdrop"
@@ -9,32 +9,38 @@
     ></button>
 
     <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
-    <aside id="developer-dashboard-nav" :class="['d-sidebar', 'tw-border-line', 'tw-bg-panel', { 'is-mobile-open': mobileMenuOpen }]">
+    <aside id="developer-dashboard-nav" :class="['d-sidebar', 'tw-border-line', 'tw-bg-panel', { 'is-mobile-open': mobileMenuOpen, 'is-collapsed': sidebarCollapsed }]">
       <div class="d-logo">
         <img class="d-mark" src="@/assets/almax-mark.png" alt="Almax logo" />
         <div>
           <div class="d-brand">ALMAX</div>
           <div class="d-brand-sub">DEV CONSOLE</div>
         </div>
+        <button class="d-collapse" type="button" :aria-label="sidebarCollapsed ? 'Expand dashboard navigation' : 'Collapse dashboard navigation'" :title="sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'" @click="toggleSidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
         <button class="d-mobile-close" type="button" aria-label="Close dashboard navigation" @click="closeMobileMenu">
           <span></span><span></span>
         </button>
       </div>
 
       <nav class="d-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          :class="['d-nav-btn', { active: activeSection === item.id }]"
-          @click="selectSection(item.id)"
-        >
-          <span class="d-nav-icon" v-html="item.icon"></span>
-          <span class="d-nav-copy">
-            <span class="d-nav-label">{{ item.label }}</span>
-            <span class="d-nav-desc">{{ item.desc }}</span>
-          </span>
-          <span v-if="item.id === 'commission'" class="d-private-dot"></span>
-        </button>
+        <template v-for="item in navItems" :key="item.id">
+          <p v-if="item.id === 'overview'" class="d-nav-group">Analytics</p>
+          <p v-if="item.id === 'wallet'" class="d-nav-group d-nav-group--spaced">Operations</p>
+          <button
+            :class="['d-nav-btn', { active: activeSection === item.id }]"
+            :title="sidebarCollapsed ? item.label : undefined"
+            @click="selectSection(item.id)"
+          >
+            <span class="d-nav-icon" v-html="item.icon"></span>
+            <span class="d-nav-copy">
+              <span class="d-nav-label">{{ item.label }}</span>
+              <span class="d-nav-desc">{{ item.desc }}</span>
+            </span>
+            <span v-if="item.id === 'commission'" class="d-private-dot"></span>
+          </button>
+        </template>
       </nav>
 
       <div class="d-user-strip">
@@ -70,7 +76,7 @@
         </div>
         <div class="d-header-right">
           <span class="d-date">{{ todayDate }}</span>
-          <span class="d-mode-badge">DEV MODE</span>
+          <span class="d-mode-badge">{{ isPreviewMode ? 'LOCAL PREVIEW' : 'DEV MODE' }}</span>
           <button class="d-refresh" @click="fetchAnalytics" :disabled="loading" title="Refresh data">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
@@ -97,21 +103,25 @@
           <!-- KPI Row 1 -->
           <div class="kpi-grid">
             <div class="kpi-card kpi-green">
+              <span class="kpi-graphic" aria-hidden="true"><svg viewBox="0 0 64 36"><path d="M3 29 15 22l10 3 13-16 10 8L61 4"/><path class="kpi-graphic-base" d="M3 33h58"/></svg></span>
               <p class="kpi-label">Total Revenue</p>
               <p class="kpi-value">{{ formatUGX(f.total_revenue) }}</p>
               <p class="kpi-sub">All confirmed payments</p>
             </div>
             <div class="kpi-card kpi-blue">
+              <span class="kpi-graphic kpi-graphic-bars" aria-hidden="true"><svg viewBox="0 0 54 38"><path d="M5 33V20h8v13M23 33V11h8v22M41 33V4h8v29M3 33h48"/></svg></span>
               <p class="kpi-label">This Month</p>
               <p class="kpi-value">{{ formatUGX(f.revenue_this_month) }}</p>
               <p class="kpi-sub">{{ formatUGX(f.revenue_this_week) }} this week</p>
             </div>
-            <div class="kpi-card kpi-gold">
+            <div class="kpi-card kpi-accent">
+              <span class="kpi-graphic kpi-graphic-ring" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17"/><path d="M24 7a17 17 0 0 1 15 9M24 15v18M18 20c0-3 2-5 6-5s6 2 6 5-2 4-6 4-6 2-6 5 2 4 6 4 6-2 6-5"/></svg></span>
               <p class="kpi-label">Available Commission</p>
               <p class="kpi-value">{{ formatUGX(currentCommission) }}</p>
               <p class="kpi-sub">{{ formatUGX(c.total_withdrawn) }} withdrawn</p>
             </div>
             <div class="kpi-card kpi-teal">
+              <span class="kpi-graphic kpi-graphic-transfer" aria-hidden="true"><svg viewBox="0 0 52 40"><path d="M5 12h36m0 0-7-7m7 7-7 7M47 28H11m0 0 7-7m-7 7 7 7"/></svg></span>
               <p class="kpi-label">Recorded Commission</p>
               <p class="kpi-value">{{ formatUGX(c.total_earned) }}</p>
               <p class="kpi-sub">{{ formatUGX(c.wallet_received ?? c.total_paid) }} paid to commission wallet</p>
@@ -121,20 +131,24 @@
           <!-- KPI Row 2 -->
           <div class="kpi-grid" style="margin-top:14px">
             <div class="kpi-card">
+              <span class="kpi-graphic" aria-hidden="true"><svg viewBox="0 0 64 36"><path d="m3 27 9-4 8 3 9-14 9 7 9-9 14 5"/><path class="kpi-graphic-base" d="M3 33h58"/></svg></span>
               <p class="kpi-label">Today's Revenue</p>
               <p class="kpi-value kpi-value--md">{{ formatUGX(f.revenue_today) }}</p>
               <p class="kpi-sub">{{ formatNum(f.today?.confirmed_count) }} confirmed · {{ f.today?.timezone || 'Africa/Kampala' }}</p>
             </div>
             <div class="kpi-card">
+              <span class="kpi-graphic kpi-graphic-people" aria-hidden="true"><svg viewBox="0 0 50 42"><circle cx="19" cy="14" r="7"/><path d="M5 38c1-9 6-14 14-14s13 5 14 14M32 9c7 0 11 4 11 10s-4 10-10 10"/></svg></span>
               <p class="kpi-label">Total Users</p>
               <p class="kpi-value kpi-value--md">{{ formatNum(u.total) }}</p>
               <p class="kpi-sub">+{{ u.new_this_month }} this month</p>
             </div>
             <div class="kpi-card">
+              <span class="kpi-graphic kpi-graphic-stack" aria-hidden="true"><svg viewBox="0 0 52 40"><path d="m26 4 21 10-21 10L5 14 26 4Z"/><path d="m7 22 19 9 19-9M7 29l19 9 19-9"/></svg></span>
               <p class="kpi-label">Active Subscriptions</p>
               <p class="kpi-value kpi-value--md">{{ formatNum(s.active_total) }}</p>
             </div>
             <div class="kpi-card kpi-warn">
+              <span class="kpi-graphic kpi-graphic-clock" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18"/><path d="M24 13v12l8 5"/></svg></span>
               <p class="kpi-label">Pending Payments</p>
               <p class="kpi-value kpi-value--md">{{ formatNum(analytics.payments.pending_count) }}</p>
               <p class="kpi-sub">Awaiting confirmation</p>
@@ -153,54 +167,20 @@
           <div class="chart-row">
             <!-- Revenue chart -->
             <div class="chart-card">
-              <p class="chart-title">Revenue — Last 30 Days</p>
-              <p class="chart-total">{{ formatUGX(f.total_revenue) }} total</p>
-              <div class="vbar-wrap" v-if="revenueChart.length">
-                <div class="vbar-bars">
-                  <div
-                    v-for="point in revenueChart"
-                    :key="point.date"
-                    class="vbar-col"
-                    :title="`${point.date}: ${formatUGX(point.amount)}`"
-                  >
-                    <div class="vbar-fill vbar-fill--gold" :style="{ height: barH(point.amount, maxRevenue) + '%' }"></div>
-                  </div>
-                </div>
-                <div class="vbar-x">
-                  <span
-                    v-for="(point, i) in revenueChart"
-                    :key="'rx' + i"
-                    class="vbar-x-lbl"
-                  >{{ i % 6 === 0 ? shortDate(point.date) : '' }}</span>
-                </div>
+              <div class="chart-heading">
+                <div><p class="chart-title">Revenue</p><p class="chart-total">{{ formatUGX(f.total_revenue) }} total</p></div>
+                <span class="chart-period">30 days</span>
               </div>
-              <p v-else class="chart-empty">No confirmed revenue in the last 30 days</p>
+              <DeveloperChart :points="revenueChart" value-key="amount" value-type="currency" accent="#4fd1c5" aria-label="Revenue during the last 30 days" empty-text="No confirmed revenue in the last 30 days" />
             </div>
 
             <!-- Signups chart -->
             <div class="chart-card">
-              <p class="chart-title">New Users — Last 30 Days</p>
-              <p class="chart-total">{{ u.new_this_month }} this month</p>
-              <div class="vbar-wrap" v-if="signupsChart.length">
-                <div class="vbar-bars">
-                  <div
-                    v-for="point in signupsChart"
-                    :key="point.date"
-                    class="vbar-col"
-                    :title="`${point.date}: ${point.count} users`"
-                  >
-                    <div class="vbar-fill vbar-fill--blue" :style="{ height: barH(point.count, maxSignups) + '%' }"></div>
-                  </div>
-                </div>
-                <div class="vbar-x">
-                  <span
-                    v-for="(point, i) in signupsChart"
-                    :key="'sx' + i"
-                    class="vbar-x-lbl"
-                  >{{ i % 6 === 0 ? shortDate(point.date) : '' }}</span>
-                </div>
+              <div class="chart-heading">
+                <div><p class="chart-title">New users</p><p class="chart-total">{{ u.new_this_month }} this month</p></div>
+                <span class="chart-period">30 days</span>
               </div>
-              <p v-else class="chart-empty">No signups in the last 30 days</p>
+              <DeveloperChart type="bar" :points="signupsChart" value-key="count" accent="#a78bfa" aria-label="New users during the last 30 days" empty-text="No signups in the last 30 days" />
             </div>
           </div>
         </div>
@@ -272,7 +252,7 @@
                 <div v-for="(value, key) in f.by_plan" :key="key" class="hbar-row">
                   <span class="hbar-label">{{ capitalize(key) }}</span>
                   <div class="hbar-track">
-                    <div class="hbar-fill hbar-fill--gold" :style="{ width: hBarW(value, maxPlanRevenue) + '%' }"></div>
+                    <div class="hbar-fill hbar-fill--accent" :style="{ width: hBarW(value, maxPlanRevenue) + '%' }"></div>
                   </div>
                   <span class="hbar-value">{{ formatUGX(value) }}</span>
                 </div>
@@ -312,25 +292,11 @@
 
           <!-- Revenue trend chart -->
           <div class="chart-card" style="margin-top:24px">
-            <p class="chart-title">Daily Revenue Trend — Last 30 Days</p>
-            <div class="vbar-wrap vbar-wrap--tall" v-if="revenueChart.length">
-              <div class="vbar-bars">
-                <div
-                  v-for="point in revenueChart"
-                  :key="point.date"
-                  class="vbar-col"
-                  :title="`${point.date}: ${formatUGX(point.amount)}`"
-                >
-                  <div class="vbar-fill vbar-fill--gold" :style="{ height: barH(point.amount, maxRevenue) + '%' }"></div>
-                </div>
-              </div>
-              <div class="vbar-x">
-                <span v-for="(point, i) in revenueChart" :key="'fx' + i" class="vbar-x-lbl">
-                  {{ i % 4 === 0 ? shortDate(point.date) : '' }}
-                </span>
-              </div>
+            <div class="chart-heading">
+              <div><p class="chart-title">Daily revenue trend</p><p class="chart-total">Confirmed collections</p></div>
+              <span class="chart-period">30 days</span>
             </div>
-            <p v-else class="chart-empty">No confirmed revenue in the last 30 days</p>
+            <DeveloperChart :points="revenueChart" value-key="amount" value-type="currency" accent="#4fd1c5" aria-label="Daily confirmed revenue during the last 30 days" empty-text="No confirmed revenue in the last 30 days" />
           </div>
 
           <div class="section-card" style="margin-top:24px">
@@ -352,22 +318,31 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in f.recent_payments" :key="row.id">
-                    <td class="td-muted">{{ row.id }}</td>
-                    <td class="td-date">{{ fmtDateTime(row.created_at) }}</td>
-                    <td class="td-date">{{ fmtDateTime(row.confirmed_at || row.failed_at) }}</td>
-                    <td><span :class="['status-badge', paymentStatusClass(row.status)]">{{ capitalize(row.status) }}</span></td>
-                    <td class="td-amount">{{ formatUGX(row.amount) }}</td>
-                    <td class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
-                    <td class="td-method">{{ (row.provider || 'jpesa').toUpperCase() }}</td>
-                    <td class="td-muted">{{ row.phone || '—' }}</td>
-                    <td class="td-muted"><code>{{ row.payment_reference || row.transaction_id || '—' }}</code></td>
+                  <tr v-for="row in paymentLedger.rows" :key="row.id">
+                    <td data-label="Record" class="td-muted">#{{ row.id }}</td>
+                    <td data-label="Attempted" class="td-date">{{ fmtDateTime(row.created_at) }}</td>
+                    <td data-label="Completed" class="td-date">{{ fmtDateTime(row.confirmed_at || row.failed_at) }}</td>
+                    <td data-label="Status"><span :class="['status-badge', paymentStatusClass(row.status)]">{{ capitalize(row.status) }}</span></td>
+                    <td data-label="Amount" class="td-amount">{{ formatUGX(row.amount) }}</td>
+                    <td data-label="Method" class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
+                    <td data-label="Gateway" class="td-method">{{ (row.provider || 'jpesa').toUpperCase() }}</td>
+                    <td data-label="Phone" class="td-muted">{{ row.phone || '—' }}</td>
+                    <td data-label="Reference" class="td-muted"><code>{{ row.payment_reference || row.transaction_id || '—' }}</code></td>
                   </tr>
-                  <tr v-if="!f.recent_payments || !f.recent_payments.length">
+                  <tr v-if="!paymentLedger.rows.length && !paymentLedger.loading">
                     <td colspan="9" class="td-empty">No payment ledger rows are available.</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="table-pagination" aria-live="polite">
+              <div>
+                <span>Showing {{ formatNum(paymentLedger.rows.length) }} of {{ formatNum(paymentLedger.total) }}</span>
+                <small v-if="paymentLedger.error">{{ paymentLedger.error }}</small>
+              </div>
+              <button v-if="paymentLedger.hasMore || paymentLedger.error" type="button" :disabled="paymentLedger.loading" @click="fetchLedger('payment')">
+                {{ paymentLedger.loading ? 'Loading…' : paymentLedger.error ? 'Try again' : 'Load 10 more' }}
+              </button>
             </div>
             <p class="ledger-note">Ledger deletion protection started on 22 Oct 2026. Records deleted before that cutover cannot be reconstructed from the current database.</p>
           </div>
@@ -399,7 +374,7 @@
               </div>
               <div class="comm-stat">
                 <span class="comm-stat-label">Available</span>
-                <span class="comm-stat-val" :class="currentCommission > 0 ? 'text-gold' : ''">{{ formatUGX(currentCommission) }}</span>
+                <span class="comm-stat-val" :class="currentCommission > 0 ? 'text-accent' : ''">{{ formatUGX(currentCommission) }}</span>
               </div>
               <div class="comm-stat">
                 <span class="comm-stat-label">Recorded</span>
@@ -410,7 +385,7 @@
 
           <!-- Commission KPI cards -->
           <div class="kpi-grid" style="margin-top:20px">
-            <div class="kpi-card kpi-gold">
+            <div class="kpi-card kpi-accent">
               <p class="kpi-label">Recorded Total</p>
               <p class="kpi-value">{{ formatUGX(c.total_earned) }}</p>
               <p class="kpi-sub">All tracked commission</p>
@@ -487,7 +462,7 @@
                 <div v-for="(value, key) in c.by_plan" :key="key" class="hbar-row">
                   <span class="hbar-label">{{ capitalize(key) }}</span>
                   <div class="hbar-track">
-                    <div class="hbar-fill hbar-fill--gold" :style="{ width: hBarW(value, maxPlanComm) + '%' }"></div>
+                    <div class="hbar-fill hbar-fill--accent" :style="{ width: hBarW(value, maxPlanComm) + '%' }"></div>
                   </div>
                   <span class="hbar-value">{{ formatUGX(value) }}</span>
                 </div>
@@ -514,7 +489,7 @@
           <!-- Recent commission transactions table -->
           <div class="section-card" style="margin-top:24px">
             <p class="section-card-title">Recent Commission Transactions</p>
-            <p class="section-card-sub">Latest 25 payments with commission tracking</p>
+            <p class="section-card-sub">Newest commission records, loaded in groups of 10</p>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
@@ -530,14 +505,14 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in c.recent" :key="row.id">
-                    <td class="td-muted">{{ row.id }}</td>
-                    <td class="td-date">{{ fmtDate(row.created_at) }}</td>
-                    <td><span class="plan-chip">{{ capitalize(row.plan_type || '—') }}</span></td>
-                    <td class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
-                    <td class="td-amount">{{ formatUGX(row.amount) }}</td>
-                    <td class="td-commission">{{ formatUGX(row.agent_commission_amount) }}</td>
-                    <td>
+                  <tr v-for="row in commissionLedger.rows" :key="row.id">
+                    <td data-label="Record" class="td-muted">#{{ row.id }}</td>
+                    <td data-label="Date" class="td-date">{{ fmtDate(row.created_at) }}</td>
+                    <td data-label="Plan"><span class="plan-chip">{{ capitalize(row.plan_type || '—') }}</span></td>
+                    <td data-label="Method" class="td-method">{{ (row.payment_method || '—').toUpperCase() }}</td>
+                    <td data-label="Payment" class="td-amount">{{ formatUGX(row.amount) }}</td>
+                    <td data-label="Commission" class="td-commission">{{ formatUGX(row.agent_commission_amount) }}</td>
+                    <td data-label="Status">
                       <span :class="['status-badge', statusClass(row.agent_commission_status)]">
                         {{ statusLabel(row.agent_commission_status) }}
                       </span>
@@ -545,7 +520,7 @@
                         {{ row.agent_commission_error }}
                       </p>
                     </td>
-                    <td class="td-action">
+                    <td data-label="Action" class="td-action">
                       <button
                         v-if="canRetryCommission(row)"
                         class="retry-commission-btn"
@@ -564,7 +539,7 @@
                       <span v-else class="action-muted">-</span>
                     </td>
                   </tr>
-                  <tr v-if="!c.recent || !c.recent.length">
+                  <tr v-if="!commissionLedger.rows.length && !commissionLedger.loading">
                     <td colspan="8" class="td-empty">
                       <template v-if="c.enabled">Commission is live — records will appear here as payments are confirmed.</template>
                       <template v-else>Commission is disabled. Set <code>PAYMENT_AGENT_COMMISSION_ENABLED=true</code> to start tracking.</template>
@@ -572,6 +547,15 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="table-pagination" aria-live="polite">
+              <div>
+                <span>Showing {{ formatNum(commissionLedger.rows.length) }} of {{ formatNum(commissionLedger.total) }}</span>
+                <small v-if="commissionLedger.error">{{ commissionLedger.error }}</small>
+              </div>
+              <button v-if="commissionLedger.hasMore || commissionLedger.error" type="button" :disabled="commissionLedger.loading" @click="fetchLedger('commission')">
+                {{ commissionLedger.loading ? 'Loading…' : commissionLedger.error ? 'Try again' : 'Load 10 more' }}
+              </button>
             </div>
           </div>
         </div>
@@ -599,26 +583,11 @@
           </div>
 
           <div class="chart-card" style="margin-top:24px">
-            <p class="chart-title">Daily Signups — Last 30 Days</p>
-            <p class="chart-total">{{ u.new_this_month }} new this month</p>
-            <div class="vbar-wrap vbar-wrap--tall" v-if="signupsChart.length">
-              <div class="vbar-bars">
-                <div
-                  v-for="point in signupsChart"
-                  :key="point.date"
-                  class="vbar-col"
-                  :title="`${point.date}: ${point.count} signups`"
-                >
-                  <div class="vbar-fill vbar-fill--blue" :style="{ height: barH(point.count, maxSignups) + '%' }"></div>
-                </div>
-              </div>
-              <div class="vbar-x">
-                <span v-for="(point, i) in signupsChart" :key="'ux' + i" class="vbar-x-lbl">
-                  {{ i % 4 === 0 ? shortDate(point.date) : '' }}
-                </span>
-              </div>
+            <div class="chart-heading">
+              <div><p class="chart-title">Daily signups</p><p class="chart-total">{{ u.new_this_month }} new this month</p></div>
+              <span class="chart-period">30 days</span>
             </div>
-            <p v-else class="chart-empty">No signups in the last 30 days</p>
+            <DeveloperChart type="bar" :points="signupsChart" value-key="count" accent="#a78bfa" aria-label="Daily signups during the last 30 days" empty-text="No signups in the last 30 days" />
           </div>
         </div>
 
@@ -706,7 +675,7 @@
                 <p class="kpi-value">{{ formatNum(si.summary?.total_conversations) }}</p>
                 <p class="kpi-sub">Customer support signals</p>
               </div>
-              <div class="kpi-card kpi-gold">
+              <div class="kpi-card kpi-accent">
                 <p class="kpi-label">Direct Feedback</p>
                 <p class="kpi-value">{{ formatNum(si.summary?.feedback_signals) }}</p>
                 <p class="kpi-sub">Complaints and suggestions</p>
@@ -731,7 +700,7 @@
                   <div v-for="row in supportCategoryRows" :key="row.category" class="hbar-row hbar-row--lg">
                     <span class="hbar-label insights-bar-label">{{ row.label }}</span>
                     <div class="hbar-track">
-                      <div class="hbar-fill hbar-fill--gold" :style="{ width: hBarW(row.count, maxSupportCategory) + '%' }"></div>
+                      <div class="hbar-fill hbar-fill--accent" :style="{ width: hBarW(row.count, maxSupportCategory) + '%' }"></div>
                     </div>
                     <span class="hbar-value insights-bar-value">{{ formatNum(row.count) }}</span>
                   </div>
@@ -781,16 +750,7 @@
               <div class="section-card">
                 <p class="section-card-title">Conversation volume</p>
                 <p class="section-card-sub">Daily support activity for the selected period</p>
-                <div class="vbar-wrap" v-if="supportTrend.length">
-                  <div class="vbar-bars">
-                    <div v-for="point in supportTrend" :key="point.date" class="vbar-col" :title="`${point.date}: ${point.conversations} conversations`">
-                      <div class="vbar-fill vbar-fill--blue" :style="{ height: barH(point.conversations, maxSupportTrend) + '%' }"></div>
-                    </div>
-                  </div>
-                  <div class="vbar-x">
-                    <span v-for="(point, i) in supportTrend" :key="'support-' + i" class="vbar-x-lbl">{{ i % supportTrendLabelStep === 0 ? shortDate(point.date) : '' }}</span>
-                  </div>
-                </div>
+                <DeveloperChart type="bar" :points="supportTrend" value-key="conversations" accent="#f59e7a" aria-label="Daily support conversation volume" empty-text="No support conversations in this period" />
               </div>
 
               <div class="section-card">
@@ -888,11 +848,13 @@
 
 <script>
 import devApi from '../../utils/devApi'
+import { disableDevPreview, isDevPreviewEnabled } from '../../utils/devPreviewMode'
 import DeveloperWallet from '../../components/dev/DeveloperWallet.vue'
+import DeveloperChart from '../../components/dev/DeveloperChart.vue'
 
 export default {
   name: 'DevDashboard',
-  components: { DeveloperWallet },
+  components: { DeveloperWallet, DeveloperChart },
   data() {
     const d = new Date()
     return {
@@ -911,7 +873,11 @@ export default {
       gatewayTesting: '',
       gatewaySwitching: '',
       retryingCommission: {},
+      paymentLedger: { rows: [], total: 0, cursor: null, hasMore: false, loading: false, error: '' },
+      commissionLedger: { rows: [], total: 0, cursor: null, hasMore: false, loading: false, error: '' },
       mobileMenuOpen: false,
+      sidebarCollapsed: false,
+      pointerFrame: null,
       todayDate: d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
       navItems: [
         {
@@ -991,6 +957,7 @@ export default {
     gatewayActiveName() {
       return this.gatewayConfig.providers?.[this.gatewayConfig.activeProvider]?.name || 'JPesa'
     },
+    isPreviewMode() { return isDevPreviewEnabled() },
     supportCategoryRows() {
       return Object.entries(this.si.by_category || {})
         .map(([category, row]) => ({ category, ...row }))
@@ -1001,23 +968,8 @@ export default {
       return Math.max(...this.supportCategoryRows.map(row => Number(row.count) || 0), 1)
     },
     supportTrend() { return this.si.trend || [] },
-    maxSupportTrend() {
-      return Math.max(...this.supportTrend.map(row => Number(row.conversations) || 0), 1)
-    },
-    supportTrendLabelStep() {
-      if (this.supportTrend.length > 120) return 60
-      if (this.supportTrend.length > 60) return 15
-      if (this.supportTrend.length > 30) return 10
-      return 5
-    },
     revenueChart() { return this.analytics?.charts?.revenue || [] },
     signupsChart() { return this.analytics?.charts?.signups || [] },
-    maxRevenue() {
-      return Math.max(...this.revenueChart.map(d => Number(d.amount) || 0), 1)
-    },
-    maxSignups() {
-      return Math.max(...this.signupsChart.map(d => Number(d.count) || 0), 1)
-    },
     maxPlanRevenue() {
       return Math.max(...Object.values(this.f.by_plan || {}).map(Number), 1)
     },
@@ -1038,19 +990,40 @@ export default {
     }
   },
   async mounted() {
+    this.sidebarCollapsed = localStorage.getItem('devSidebarCollapsed') === 'true'
     window.addEventListener('keydown', this.onKeydown)
     window.addEventListener('resize', this.onViewportChange)
     await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig(), this.fetchWalletSummary()])
   },
   beforeUnmount() {
+    if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
     window.removeEventListener('keydown', this.onKeydown)
     window.removeEventListener('resize', this.onViewportChange)
     document.body.style.overflow = ''
   },
   methods: {
+    onDashboardPointerMove(event) {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      const tile = event.target.closest?.('.kpi-card, .chart-card, .section-card, .gateway-card, .withdrawal-card')
+      if (!tile) return
+      if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
+      const clientX = event.clientX
+      const clientY = event.clientY
+      this.pointerFrame = requestAnimationFrame(() => {
+        const rect = tile.getBoundingClientRect()
+        tile.style.setProperty('--pointer-x', `${clientX - rect.left}px`)
+        tile.style.setProperty('--pointer-y', `${clientY - rect.top}px`)
+        this.pointerFrame = null
+      })
+    },
     selectSection(section) {
       this.activeSection = section
       this.closeMobileMenu()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    toggleSidebar() {
+      this.sidebarCollapsed = !this.sidebarCollapsed
+      localStorage.setItem('devSidebarCollapsed', String(this.sidebarCollapsed))
     },
     toggleMobileMenu() {
       this.mobileMenuOpen ? this.closeMobileMenu() : this.openMobileMenu()
@@ -1129,7 +1102,11 @@ export default {
       try {
         const { data } = await devApi.get('/api/analytics/developer')
         this.analytics = data
-        await this.fetchSupportInsights()
+        await Promise.all([
+          this.fetchSupportInsights(),
+          this.fetchLedger('payment', true),
+          this.fetchLedger('commission', true)
+        ])
       } catch (err) {
         if (err.response?.status === 401 || err.response?.status === 403) {
           this.$router.push('/dev/login')
@@ -1138,6 +1115,36 @@ export default {
         }
       } finally {
         this.loading = false
+      }
+    },
+    async fetchLedger(kind, reset = false) {
+      const ledger = kind === 'payment' ? this.paymentLedger : this.commissionLedger
+      const endpoint = kind === 'payment'
+        ? '/api/analytics/developer/payments'
+        : '/api/analytics/developer/commission-transactions'
+      if (ledger.loading || (!reset && !ledger.hasMore)) return
+
+      ledger.loading = true
+      ledger.error = ''
+      try {
+        const { data } = await devApi.get(endpoint, {
+          params: !reset && ledger.cursor ? { cursor: ledger.cursor } : {}
+        })
+        const incoming = Array.isArray(data.data) ? data.data : []
+        const rows = reset ? incoming : [...ledger.rows, ...incoming]
+        const seen = new Set()
+        ledger.rows = rows.filter(row => {
+          if (seen.has(row.id)) return false
+          seen.add(row.id)
+          return true
+        })
+        ledger.total = Number(data.meta?.total || ledger.rows.length)
+        ledger.cursor = data.meta?.next_cursor || null
+        ledger.hasMore = Boolean(data.meta?.has_more)
+      } catch (err) {
+        ledger.error = err.response?.data?.message || 'More records could not be loaded. Please try again.'
+      } finally {
+        ledger.loading = false
       }
     },
     async fetchSupportInsights() {
@@ -1165,6 +1172,7 @@ export default {
     },
     logout() {
       localStorage.removeItem('devToken')
+      disableDevPreview()
       this.$router.push('/dev/login')
     },
     formatUGX(n) {
@@ -1173,18 +1181,9 @@ export default {
     formatNum(n) {
       return Number(n || 0).toLocaleString()
     },
-    barH(value, max) {
-      if (!max) return 1
-      return Math.max((Number(value) / Number(max)) * 100, 1).toFixed(1)
-    },
     hBarW(value, max) {
       if (!max) return 1
       return Math.max((Number(value) / Number(max)) * 100, 1).toFixed(1)
-    },
-    shortDate(d) {
-      if (!d) return ''
-      const dt = new Date(d)
-      return `${dt.getDate()}/${dt.getMonth() + 1}`
     },
     fmtDate(d) {
       if (!d) return '—'
@@ -1263,13 +1262,20 @@ export default {
 </script>
 
 <style scoped>
+@font-face {
+  font-family: 'Outfit Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('~@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2') format('woff2-variations');
+}
 /* ── Layout ─────────────────────────────────────────────────────────────── */
 .dev-dash {
   display: flex;
   min-height: 100vh;
   background: #0a0e1a;
   color: #e5e7eb;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Outfit Variable', 'Avenir Next', system-ui, sans-serif;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
@@ -1316,7 +1322,7 @@ export default {
 .d-brand-sub {
   font-size: 8px;
   font-weight: 700;
-  color: #f59e0b;
+  color: #8fb3d9;
   letter-spacing: 1.5px;
   margin-top: 3px;
 }
@@ -1349,8 +1355,8 @@ export default {
 }
 
 .d-nav-btn.active {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: rgba(143, 179, 217, 0.12);
+  color: #8fb3d9;
 }
 
 .d-nav-icon {
@@ -1380,9 +1386,7 @@ export default {
   line-height: 1;
 }
 
-.d-nav-btn.active .d-nav-desc {
-  color: #92400e;
-}
+.d-nav-btn.active .d-nav-desc { color: #7e9fbe; }
 
 .d-private-dot {
   position: absolute;
@@ -1392,8 +1396,8 @@ export default {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  background: #8fb3d9;
+  box-shadow: 0 0 8px rgba(143, 179, 217, .34);
 }
 
 .d-user-strip {
@@ -1405,7 +1409,7 @@ export default {
 }
 
 .d-user-av {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: #8fb3d9;
   color: #0a0e1a;
   font-size: 13px;
   font-weight: 800;
@@ -1474,7 +1478,7 @@ export default {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: #f59e0b;
+  color: #8fb3d9;
   text-transform: uppercase;
   margin: 0 0 4px;
 }
@@ -1507,9 +1511,9 @@ export default {
 }
 
 .d-mode-badge {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(143, 179, 217, 0.12);
+  color: #8fb3d9;
+  border: 1px solid rgba(143, 179, 217, 0.25);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -1531,7 +1535,7 @@ export default {
   transition: color 0.15s;
 }
 
-.d-refresh:hover:not(:disabled) { color: #f59e0b; }
+.d-refresh:hover:not(:disabled) { color: #8fb3d9; }
 .d-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .d-body {
@@ -1552,7 +1556,7 @@ export default {
 .d-spinner {
   width: 32px; height: 32px;
   border: 3px solid #1a2540;
-  border-top-color: #f59e0b;
+  border-top-color: #8fb3d9;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1590,12 +1594,12 @@ export default {
   padding: 20px;
 }
 
-.kpi-card.kpi-green  { border-left: 3px solid #10b981; }
-.kpi-card.kpi-blue   { border-left: 3px solid #3b82f6; }
-.kpi-card.kpi-gold   { border-left: 3px solid #f59e0b; }
-.kpi-card.kpi-teal   { border-left: 3px solid #14b8a6; }
-.kpi-card.kpi-warn   { border-left: 3px solid #f97316; }
-.kpi-card.kpi-red    { border-left: 3px solid #ef4444; }
+.kpi-card.kpi-green,
+.kpi-card.kpi-blue,
+.kpi-card.kpi-accent,
+.kpi-card.kpi-teal,
+.kpi-card.kpi-warn,
+.kpi-card.kpi-red { border-left: 0; }
 
 .kpi-label {
   font-size: 10px;
@@ -1638,8 +1642,8 @@ export default {
 }
 
 .finance-reconcile strong { color: #d1d5db; }
-.finance-reconcile--ok { border-left: 3px solid #10b981; }
-.finance-reconcile--warn { border-left: 3px solid #ef4444; }
+.finance-reconcile--ok { border-color: rgba(16,185,129,.28); }
+.finance-reconcile--warn { border-color: rgba(239,68,68,.28); }
 
 /* ── Charts ──────────────────────────────────────────────────────────────── */
 .chart-row {
@@ -1670,66 +1674,6 @@ export default {
   font-weight: 700;
   color: #e5e7eb;
   margin: 0 0 16px;
-}
-
-.chart-empty {
-  font-size: 12px;
-  color: #374151;
-  margin: 24px 0;
-  text-align: center;
-}
-
-.vbar-wrap {
-  height: 140px;
-  display: flex;
-  flex-direction: column;
-}
-
-.vbar-wrap--tall {
-  height: 200px;
-}
-
-.vbar-bars {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  padding-bottom: 4px;
-}
-
-.vbar-col {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  height: 100%;
-  cursor: default;
-}
-
-.vbar-fill {
-  width: 100%;
-  border-radius: 2px 2px 0 0;
-  min-height: 2px;
-  transition: opacity 0.15s;
-}
-
-.vbar-fill:hover { opacity: 0.75; }
-
-.vbar-fill--gold  { background: #f59e0b; }
-.vbar-fill--blue  { background: #3b82f6; }
-.vbar-fill--green { background: #10b981; }
-
-.vbar-x {
-  display: flex;
-  margin-top: 4px;
-}
-
-.vbar-x-lbl {
-  flex: 1;
-  font-size: 8px;
-  color: #374151;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 /* ── Two column grid ─────────────────────────────────────────────────────── */
@@ -1806,9 +1750,9 @@ export default {
   transition: width 0.4s ease;
 }
 
-.hbar-fill--gold  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-.hbar-fill--teal  { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
-.hbar-fill--green { background: linear-gradient(90deg, #10b981, #34d399); }
+.hbar-fill--accent { background: #8fb3d9; }
+.hbar-fill--teal  { background: #6f9eaa; }
+.hbar-fill--green { background: #5ba181; }
 
 .hbar-value {
   font-size: 11px;
@@ -1827,8 +1771,8 @@ export default {
 
 /* ── Commission Banner ───────────────────────────────────────────────────── */
 .comm-banner {
-  background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.03) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: #111a24;
+  border: 1px solid rgba(143, 179, 217, .16);
   border-radius: 12px;
   padding: 20px 24px;
   display: flex;
@@ -1836,13 +1780,10 @@ export default {
   justify-content: space-between;
   gap: 24px;
 }
-.comm-banner--active {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(245,158,11,0.05) 100%);
-}
+.comm-banner--active { border-color: rgba(91, 161, 129, .28); background: #101c1d; }
 .comm-banner--inactive {
   border-color: rgba(239, 68, 68, 0.25);
-  background: linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(245,158,11,0.03) 100%);
+  background: rgba(239,68,68,.055);
 }
 .comm-live-pill {
   display: inline-flex;
@@ -1867,7 +1808,7 @@ export default {
 .comm-rate-badge {
   font-size: 32px;
   font-weight: 900;
-  color: #f59e0b;
+  color: #8fb3d9;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -1913,7 +1854,7 @@ export default {
   margin-top: 2px;
 }
 
-.text-gold { color: #f59e0b; }
+.text-accent { color: #9fbee0; }
 
 /* ── JPESA withdrawal ledger ─────────────────────────────────────────────── */
 .withdrawal-card {
@@ -1983,9 +1924,9 @@ export default {
 }
 
 .withdrawal-secondary {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.32);
-  color: #f59e0b;
+  background: rgba(143, 179, 217, 0.12);
+  border: 1px solid rgba(143, 179, 217, 0.32);
+  color: #8fb3d9;
   padding: 0 12px;
 }
 
@@ -2078,7 +2019,7 @@ export default {
 .td-date    { color: #6b7280; white-space: nowrap; }
 .td-method  { font-weight: 600; color: #3b82f6; }
 .td-amount  { font-weight: 700; color: #e5e7eb; text-align: right; }
-.td-commission { font-weight: 800; color: #f59e0b; text-align: right; }
+.td-commission { font-weight: 800; color: #8fb3d9; text-align: right; }
 .td-action  { text-align: right; white-space: nowrap; }
 .td-empty   { text-align: center; color: #374151; padding: 24px; font-size: 12px; }
 
@@ -2093,7 +2034,7 @@ export default {
 
 code {
   background: #1a2540;
-  color: #f59e0b;
+  color: #8fb3d9;
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 11px;
@@ -2120,7 +2061,7 @@ code {
 
 .st-done { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
 .st-proc { background: rgba(59,130,246,0.12);  color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
-.st-pend { background: rgba(245,158,11,0.12);  color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); }
+.st-pend { background: rgba(143,179,217,.12); color: #9fbee0; border: 1px solid rgba(143,179,217,.2); }
 .st-fail { background: rgba(239,68,68,0.12);   color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
 .st-none { background: rgba(107,114,128,0.12); color: #6b7280; border: 1px solid rgba(107,114,128,0.2); }
 
@@ -2143,10 +2084,10 @@ code {
   min-width: 72px;
   height: 28px;
   padding: 0 9px;
-  border: 1px solid rgba(245,158,11,0.32);
+  border: 1px solid rgba(143,179,217,.32);
   border-radius: 6px;
-  background: rgba(245,158,11,0.12);
-  color: #f59e0b;
+  background: rgba(143,179,217,.12);
+  color: #8fb3d9;
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
@@ -2159,8 +2100,8 @@ code {
 }
 
 .retry-commission-btn:hover {
-  background: rgba(245,158,11,0.2);
-  border-color: rgba(245,158,11,0.48);
+  background: rgba(143,179,217,.2);
+  border-color: rgba(143,179,217,.48);
 }
 
 .retry-commission-btn:disabled {
@@ -2219,7 +2160,7 @@ code {
 }
 
 .period-btn:hover:not(:disabled) { color: #d1d5db; }
-.period-btn.active { background: #1a2540; color: #f59e0b; }
+.period-btn.active { background: #1a2540; color: #8fb3d9; }
 .period-btn:disabled { cursor: wait; opacity: 0.65; }
 
 .insights-state {
@@ -2252,7 +2193,7 @@ code {
   overflow: hidden;
   border: 1px solid rgba(59, 130, 246, 0.28);
   border-radius: 12px;
-  background: linear-gradient(110deg, rgba(59, 130, 246, 0.12), rgba(17, 24, 39, 0.96) 48%);
+  background: #111a27;
 }
 
 .brief-marker {
@@ -2389,7 +2330,7 @@ code {
 
 .theme-title-row > span {
   flex-shrink: 0;
-  color: #f59e0b;
+  color: #8fb3d9;
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
@@ -2453,8 +2394,8 @@ code {
 .gateway-callout p { max-width: 680px; margin: 0; color: #7f8ca3; font-size: 12px; line-height: 1.65; }
 .gateway-live { align-self: flex-start; display: inline-flex; align-items: center; gap: 7px; color: #34d399; font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .gateway-live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 5px rgba(52, 211, 153, .08); }
-.gateway-live--busy { color: #fbbf24; }
-.gateway-error { margin: 14px 0 0; padding: 11px 13px; border-left: 2px solid #f87171; background: rgba(248, 113, 113, .07); color: #fca5a5; font-size: 11px; }
+.gateway-live--busy { color: #9fbee0; }
+.gateway-error { margin: 14px 0 0; padding: 11px 13px; border: 1px solid rgba(248,113,113,.2); border-radius: 8px; background: rgba(248, 113, 113, .07); color: #fca5a5; font-size: 11px; }
 .gateway-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 .gateway-card { padding: 22px; border: 1px solid #1f2a3d; background: #0c121e; transition: border-color .2s, background .2s; }
 .gateway-card--active { border-color: rgba(52, 211, 153, .48); background: #0c171b; }
@@ -2520,11 +2461,11 @@ code {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    border: 1px solid rgba(245,158,11,0.34);
+    border: 1px solid rgba(143,179,217,.34);
     border-radius: 8px;
-    background: rgba(245,158,11,0.1);
+    background: rgba(143,179,217,.1);
   }
-  .d-mobile-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #f59e0b; }
+  .d-mobile-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #8fb3d9; }
   .d-mobile-close {
     display: block;
     position: relative;
@@ -2553,21 +2494,236 @@ code {
   .gateway-callout { flex-direction: column; }
 }
 
-/* Tailwind-backed developer-console refresh. Existing domain-specific chart
-   rules stay local while these shared surfaces establish one visual system. */
-.d-sidebar { @apply tw-shadow-panel; }
-.d-header { @apply tw-sticky tw-top-0 tw-z-40; }
-.d-nav-btn { @apply tw-rounded-md tw-border tw-border-transparent tw-transition-colors; }
-.d-nav-btn:hover { @apply tw-border-line tw-bg-slate-800/50; }
-.d-nav-btn.active { @apply tw-border-amber-400/30 tw-bg-amber-400/10; }
-.d-refresh, .d-logout, button { @apply focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-signal/40 focus:tw-ring-offset-2 focus:tw-ring-offset-ink; }
+/* ── Executive visual system ───────────────────────────────────────────── */
+.dev-dash {
+  --d-ink: #0b0f14;
+  --d-sidebar: #0e141d;
+  --d-panel: #121923;
+  --d-elevated: #17212d;
+  --d-line: rgba(148, 163, 184, .11);
+  --d-accent: #8fb3d9;
+  --d-accent-strong: #b7d0e8;
+  --d-text: #f2f5f7;
+  --d-muted: #8290a3;
+  min-height: 100dvh;
+  background: var(--d-ink);
+  color: var(--d-text);
+  font-family: 'Outfit Variable', 'Avenir Next', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.d-sidebar {
+  width: 252px;
+  border: 0;
+  background: var(--d-sidebar);
+  box-shadow: 18px 0 45px rgba(2, 6, 12, .22);
+}
+.d-logo { padding: 28px 22px 24px; border-bottom-color: var(--d-line); }
+.d-brand { color: var(--d-text); font-weight: 720; letter-spacing: .16em; }
+.d-brand-sub { color: var(--d-accent); letter-spacing: .18em; }
+.d-collapse { display: grid; width: 30px; height: 30px; margin-left: auto; flex: 0 0 auto; place-items: center; border: 0; border-radius: 8px; background: rgba(255,255,255,.035); color: #718095; cursor: pointer; transition: color .2s ease, background .2s ease, transform .2s ease; }
+.d-collapse svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.d-collapse:hover { background: rgba(143,179,217,.09); color: var(--d-accent-strong); }
+.d-nav { padding: 18px 12px; }
+.d-nav-group { margin: 4px 10px 10px; color: #465264; font-size: 8px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; }
+.d-nav-group--spaced { margin-top: 22px; }
+.d-nav-btn {
+  min-height: 52px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: 8px;
+  color: #718095;
+  transition: color .2s ease, background .2s ease, transform .2s ease;
+}
+.d-nav-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 2px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--d-accent);
+  transition: height .2s ease;
+}
+.d-nav-btn:hover { border: 0; background: rgba(255,255,255,.035); color: #cbd3dc; transform: translateX(2px); }
+.d-nav-btn.active { border: 0; background: rgba(143,179,217,.1); color: #c7dced; }
+.d-nav-btn.active::before { height: 24px; }
+.d-nav-btn.active .d-nav-desc { color: #7e9fbe; }
+.d-nav-icon { width: 20px; }
+.d-nav-label { font-size: 12px; font-weight: 650; }
+.d-nav-desc { margin-top: 5px; color: #4f5b6b; }
+.d-user-strip { border-top-color: var(--d-line); }
+.d-user-av { border-radius: 9px; background: var(--d-accent); color: #09111a; }
+.d-logout { margin: 0 12px 14px; border: 0; border-radius: 7px; background: rgba(255,255,255,.025); }
+.d-logout:hover { border: 0; background: rgba(239,68,68,.08); }
+.d-main { margin-left: 252px; min-width: 0; background: var(--d-ink); }
+.d-header {
+  padding: 26px 34px 20px;
+  border-bottom: 1px solid var(--d-line);
+  background: rgba(11,15,20,.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.d-kicker { color: var(--d-accent); font-size: 9px; letter-spacing: .2em; }
+.d-title { color: var(--d-text); font-size: clamp(22px, 2vw, 28px); font-weight: 680; letter-spacing: -.035em; }
+.d-subtitle { color: var(--d-muted); }
+.d-date { color: #657286; }
+.d-mode-badge { border: 0; background: rgba(143,179,217,.1); color: #a9c7e2; }
+.d-refresh {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  background: var(--d-elevated);
+  color: #8b98a9;
+  transition: color .2s ease, background .2s ease, transform .2s ease;
+}
+.d-refresh:hover:not(:disabled) { background: #1d2937; color: var(--d-accent); transform: rotate(12deg); }
+.d-body { padding: 30px 34px 48px; }
+.d-body > div { animation: dashboard-enter .34s cubic-bezier(.22,.8,.2,1) both; transform-origin: top center; }
+@keyframes dashboard-enter { from { opacity: 0; transform: translateY(8px); filter: blur(3px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+
 .kpi-card, .chart-card, .section-card, .audit-card, .gateway-card, .gateway-callout,
-.insights-brief, .theme-card, .sentiment-card, .withdrawal-card { @apply tw-rounded-lg tw-border-line tw-bg-panel tw-shadow-panel; }
-.gateway-actions button, .gateway-active-pill, .gateway-ready-pill, .gateway-capabilities span { @apply tw-rounded-md; }
-.data-table-wrap, .commission-table-wrap { @apply tw-overflow-x-auto tw-rounded-lg tw-border tw-border-line; }
+.insights-brief, .theme-card, .sentiment-card, .withdrawal-card {
+  border: 1px solid rgba(148,163,184,.075);
+  border-radius: 14px;
+  background: var(--d-panel);
+  box-shadow: 0 16px 40px rgba(2, 6, 12, .14);
+}
+.kpi-grid { gap: 16px; }
+.kpi-card {
+  --tile-rgb: 104, 167, 255;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 22px;
+  border-left: 0 !important;
+  transition: transform .24s cubic-bezier(.22,.8,.2,1), background .22s ease, border-color .22s ease, box-shadow .22s ease;
+}
+.kpi-card::before { content: ''; position: absolute; inset: 0; z-index: 0; background: radial-gradient(260px circle at var(--pointer-x, 86%) var(--pointer-y, 12%), rgba(var(--tile-rgb), .2), transparent 68%); opacity: .36; pointer-events: none; transition: opacity .24s ease; }
+.kpi-card > * { position: relative; z-index: 1; }
+.kpi-graphic { position: absolute; top: 17px; right: 18px; width: 54px; height: 38px; display: grid; place-items: center; color: #718da9; opacity: .6; pointer-events: none; transition: transform .3s cubic-bezier(.22,.8,.2,1), opacity .22s ease; }
+.kpi-graphic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.kpi-graphic-base { opacity: .3; }
+.kpi-graphic-ring, .kpi-graphic-people, .kpi-graphic-stack, .kpi-graphic-clock { width: 40px; height: 40px; }
+.kpi-green { --tile-rgb: 79, 209, 151; background: #101d1d; }
+.kpi-blue { --tile-rgb: 104, 167, 255; background: #111a27; }
+.kpi-accent { --tile-rgb: 167, 139, 250; background: #181726; }
+.kpi-teal { --tile-rgb: 79, 209, 197; background: #101d22; }
+.kpi-warn, .kpi-red { --tile-rgb: 245, 126, 126; background: #21171c; }
+.kpi-green .kpi-graphic { color: rgb(var(--tile-rgb)); }
+.kpi-blue .kpi-graphic, .kpi-accent .kpi-graphic, .kpi-teal .kpi-graphic, .kpi-warn .kpi-graphic { color: rgb(var(--tile-rgb)); }
+.kpi-card::after { content: ''; position: absolute; top: 18px; right: 18px; width: 6px; height: 6px; border-radius: 50%; background: #59677a; }
+.kpi-card.kpi-green::after { background: #48a982; }
+.kpi-card.kpi-blue::after, .kpi-card.kpi-teal::after { background: #7f96b2; }
+.kpi-card.kpi-accent::after { background: var(--d-accent); }
+.kpi-card.kpi-red::after, .kpi-card.kpi-warn::after { background: #b96f6f; }
+.kpi-card:hover { transform: translateY(-4px); border-color: rgba(var(--tile-rgb),.24); box-shadow: 0 24px 48px rgba(2, 6, 12, .27); }
+.kpi-card:hover::before { opacity: 1; }
+.kpi-card:hover .kpi-graphic { transform: translateY(-2px) scale(1.06); opacity: .95; }
+.kpi-card:active { transform: translateY(-1px) scale(.995); }
+.kpi-label { color: #738095; font-size: 9px; letter-spacing: .13em; }
+.kpi-value { color: var(--d-text); font-size: clamp(20px, 1.8vw, 26px); font-weight: 680; letter-spacing: -.035em; }
+.kpi-sub { margin-top: 10px; color: #667387; }
+.finance-reconcile { border: 1px solid rgba(75,143,117,.18); border-radius: 8px; background: #0f161e; color: #748196; }
+.finance-reconcile--warn { border-color: rgba(185,111,111,.2); }
+.finance-reconcile strong { color: #cbd3dc; }
+
+.chart-row { gap: 18px; margin-top: 22px; }
+.chart-card, .section-card { padding: 22px; }
+.chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.chart-title, .section-card-title { margin: 0; color: #aeb9c6; font-size: 12px; font-weight: 650; letter-spacing: .01em; text-transform: none; opacity: 1; }
+.chart-total, .section-card-sub { margin: 5px 0 0; color: #657286; font-size: 11px; font-weight: 500; }
+.chart-period { flex: 0 0 auto; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,.04); color: #728095; font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; }
+.hbar-track { height: 6px; border-radius: 6px; background: #202b38; overflow: hidden; }
+.hbar-fill { border-radius: 6px; background: var(--d-accent); transition: width .55s cubic-bezier(.2,.8,.2,1), filter .2s ease; }
+.hbar-row:hover .hbar-fill { filter: brightness(1.18); }
+.hbar-fill--blue, .hbar-fill--teal, .hbar-fill--green { background: #7f96b2; }
+
+.table-wrap { margin-top: 18px; overflow-x: auto; border-radius: 10px; background: #0f161e; }
+.data-table { font-size: 11px; }
+.data-table th { padding: 12px; border-bottom-color: var(--d-line); background: #101821; color: #657286; font-size: 8px; letter-spacing: .13em; }
+.data-table td { padding: 13px 12px; border-bottom-color: rgba(148,163,184,.07); color: #97a4b4; transition: background .18s ease, color .18s ease; }
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tr:hover td { background: #151f2a; color: #c7d0da; }
+.td-amount { color: #dce2e8 !important; }
+.td-commission { color: #9fbee0 !important; }
+.td-method { color: #91a5bc !important; }
+.td-muted { color: #69778a !important; }
+.table-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 14px 2px 0; }
+.table-pagination > div { display: flex; flex-direction: column; gap: 4px; color: #718095; font-size: 10px; }
+.table-pagination small { color: #d98585; }
+.table-pagination button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 7px; background: var(--d-elevated); color: #d7dde4; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; transition: background .2s ease, color .2s ease, transform .15s ease; }
+.table-pagination button:hover:not(:disabled) { background: #213041; color: #bdd4e9; transform: translateY(-1px); }
+.table-pagination button:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.table-pagination button:disabled { opacity: .48; cursor: wait; }
+.status-badge { border: 0; border-radius: 5px; }
+.plan-chip, code { border-radius: 5px; background: #202b38; }
+
+.gateway-callout { background: var(--d-panel); }
+.gateway-card { transition: transform .22s ease, background .22s ease, box-shadow .22s ease; }
+.gateway-card:hover { transform: translateY(-2px); background: #151e29; box-shadow: 0 20px 42px rgba(2,6,12,.2); }
+.gateway-card:active { transform: translateY(0) scale(.995); }
+.gateway-card--active { background: #111e1d; box-shadow: inset 2px 0 #5c9a7e; }
+.gateway-actions button { min-height: 42px; border-color: var(--d-line); border-radius: 7px; transition: background .2s ease, color .2s ease, transform .15s ease; }
+.gateway-actions button:hover:not(:disabled) { background: #1a2633; color: #fff; }
+.gateway-actions button:active:not(:disabled) { transform: scale(.98); }
+.gateway-actions .gateway-switch-btn { border: 0; background: var(--d-accent); color: #09111a; }
+.gateway-actions .gateway-switch-btn:hover:not(:disabled) { background: #aac7e1; color: #09111a; }
+
+.d-refresh:focus-visible, .d-logout:focus-visible, .d-nav-btn:focus-visible,
+.table-pagination button:focus-visible, .gateway-actions button:focus-visible,
+.retry-commission-btn:focus-visible, .d-collapse:focus-visible { outline: 2px solid var(--d-accent); outline-offset: 3px; }
+.dev-dash button { -webkit-tap-highlight-color: transparent; }
+.dev-dash button:active:not(:disabled) { transform: translateY(0) scale(.975); }
+.dev-dash :is(.chart-card,.section-card,.audit-card,.withdrawal-card) { transition: border-color .22s ease, background-color .22s ease, box-shadow .22s ease; }
+.dev-dash :is(.chart-card,.section-card,.audit-card,.withdrawal-card):hover { border-color: rgba(143,179,217,.13); box-shadow: 0 20px 44px rgba(2,6,12,.18); }
+
+@media (min-width: 769px) {
+  .d-sidebar, .d-main { transition: width .3s cubic-bezier(.22,.8,.2,1), margin-left .3s cubic-bezier(.22,.8,.2,1); }
+  .d-sidebar.is-collapsed { width: 86px; overflow-x: hidden; }
+  .d-sidebar.is-collapsed + .d-main { margin-left: 86px; }
+  .d-sidebar.is-collapsed .d-logo { gap: 8px; padding: 24px 8px 20px; justify-content: center; }
+  .d-sidebar.is-collapsed .d-logo > div,
+  .d-sidebar.is-collapsed .d-nav-copy,
+  .d-sidebar.is-collapsed .d-nav-group,
+  .d-sidebar.is-collapsed .d-private-dot,
+  .d-sidebar.is-collapsed .d-user-info { display: none; }
+  .d-sidebar.is-collapsed .d-collapse { width: 26px; }
+  .d-sidebar.is-collapsed .d-collapse svg { transform: rotate(180deg); }
+  .d-sidebar.is-collapsed .d-nav-btn { justify-content: center; padding-inline: 0; }
+  .d-sidebar.is-collapsed .d-nav-icon { width: 24px; }
+  .d-sidebar.is-collapsed .d-user-strip { justify-content: center; padding-inline: 8px; }
+  .d-sidebar.is-collapsed .d-logout { min-height: 40px; overflow: hidden; font-size: 0; text-align: center; }
+  .d-sidebar.is-collapsed .d-logout::before { content: '\2192'; font-size: 17px; }
+}
+
 @media (max-width: 768px) {
-  .d-title { @apply tw-text-2xl; }
-  .d-header-right { @apply tw-hidden; }
-  .d-body { @apply tw-space-y-5; }
+  .d-sidebar { width: min(86vw, 310px); }
+  .d-main { margin-left: 0; }
+  .d-header { padding: 16px 18px; }
+  .d-header-right { display: none; }
+  .d-body { padding: 18px 16px 36px; }
+  .d-mobile-toggle { border: 0; background: var(--d-elevated); }
+  .d-mobile-toggle span { background: var(--d-accent); }
+  .d-mobile-close { border: 0; background: var(--d-elevated); }
+  .d-collapse { display: none; }
+}
+@media (max-width: 640px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .chart-card, .section-card { padding: 18px; }
+  .table-wrap { overflow: visible; background: transparent; }
+  .data-table, .data-table tbody { display: block; }
+  .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  .data-table tr { display: grid; gap: 0; margin-bottom: 10px; padding: 9px 14px; border-radius: 10px; background: #0f161e; }
+  .data-table td { display: grid; grid-template-columns: minmax(88px, .7fr) minmax(0, 1.3fr); align-items: start; gap: 14px; padding: 8px 0; border-bottom: 1px solid rgba(148,163,184,.07); text-align: right !important; white-space: normal; overflow-wrap: anywhere; }
+  .data-table td::before { content: attr(data-label); color: #657286; font-size: 8px; font-weight: 750; letter-spacing: .11em; text-align: left; text-transform: uppercase; }
+  .data-table td[colspan] { display: block; text-align: center !important; }
+  .data-table td[colspan]::before { content: none; }
+  .data-table tr:hover td { background: transparent; }
+  .table-pagination { align-items: flex-start; }
+  .table-pagination button { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-body > div, .d-nav-btn, .kpi-card, .kpi-graphic, .gateway-card, .d-refresh, .hbar-fill { animation: none; transition: none; }
+  .kpi-card:hover, .kpi-card:active, .gateway-card:hover, .gateway-card:active, .dev-dash button:active:not(:disabled) { transform: none; }
 }
 </style>
