@@ -1,11 +1,17 @@
 import axios from 'axios'
 import { getApiBaseUrl } from './apiBase'
+import { createDevPreviewResponse } from './devPreviewData'
+import { disableDevPreview, isDevPreviewEnabled } from './devPreviewMode'
 
 const devApi = axios.create({
   baseURL: getApiBaseUrl()
 })
 
 devApi.interceptors.request.use(config => {
+  if (isDevPreviewEnabled()) {
+    config.adapter = createDevPreviewResponse
+    return config
+  }
   const token = localStorage.getItem('devToken')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -18,6 +24,7 @@ devApi.interceptors.response.use(
   error => {
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       localStorage.removeItem('devToken')
+      disableDevPreview()
       window.location.href = '/#/dev/login'
       return new Promise(() => {})
     }

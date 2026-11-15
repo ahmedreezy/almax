@@ -45,6 +45,12 @@
         </button>
       </form>
 
+      <div v-if="previewAvailable" class="preview-access">
+        <span>Local seeded preview</span>
+        <button type="button" @click="openPreview">View upgraded owner dashboard</button>
+        <p>Uses sample revenue, payments, customers, wallet activity, and pagination.</p>
+      </div>
+
       <a href="/" class="back-link">Back to site</a>
     </div>
   </div>
@@ -52,6 +58,7 @@
 
 <script>
 import axios from 'axios'
+import { enableAdminPreview, isAdminPreviewAvailable } from '../../utils/adminPreviewMode'
 
 export default {
   name: 'AdminLogin',
@@ -64,7 +71,13 @@ export default {
       error: ''
     }
   },
+  computed: { previewAvailable() { return isAdminPreviewAvailable() } },
   methods: {
+    openPreview() {
+      localStorage.removeItem('adminToken')
+      enableAdminPreview()
+      this.$router.replace('/admin/dashboard')
+    },
     async handleLogin() {
       this.error = ''
       this.loading = true
@@ -78,6 +91,7 @@ export default {
           return
         }
         localStorage.setItem('adminToken', data.token)
+        localStorage.removeItem('almaxAdminPreview')
         this.$router.push('/admin/dashboard')
       } catch (err) {
         const payload = err.response?.data || {}
@@ -245,4 +259,9 @@ export default {
   transition: color 0.2s;
 }
 .back-link:hover { color: #FFD700; }
+.preview-access { margin-top: 22px; padding: 16px; border: 1px solid rgba(200,169,107,.2); border-radius: 9px; background: rgba(200,169,107,.055); text-align: left; }
+.preview-access span { display: block; color: #8b96a4; font-size: 9px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.preview-access button { margin-top: 8px; padding: 0; border: 0; background: transparent; color: #d9c18a; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.preview-access button:hover { color: #f0d79f; text-decoration: underline; text-underline-offset: 4px; }
+.preview-access p { margin: 6px 0 0; color: #647080; font-size: 10px; line-height: 1.45; }
 </style>

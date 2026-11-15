@@ -9,8 +9,8 @@
         <p class="section-sub">Latest winning proof from our VIP members</p>
       </div>
 
-      <div class="winnings-grid">
-        <div v-for="win in winnings" :key="win.id" class="win-card">
+      <div class="winnings-grid" role="list" aria-label="Recent verified winnings" tabindex="0">
+        <div v-for="win in winnings" :key="win.id" class="win-card" role="listitem">
           <div class="win-media">
             <img v-if="imageSrc(win)" :src="imageSrc(win)" :alt="captionFor(win) || 'Winning proof'" class="win-image" loading="lazy" style="cursor:zoom-in" @click="$lightbox.open(imageSrc(win))" />
             <div v-else class="win-image-empty">Winning Proof</div>
@@ -19,6 +19,10 @@
             </div>
           </div>
         </div>
+      </div>
+      <div v-if="winnings.length > 1" class="mobile-swipe-hint" aria-hidden="true">
+        <span class="mobile-swipe-hint__icon">↔</span>
+        <span>Swipe to see more wins</span>
       </div>
     </div>
   </section>
@@ -182,5 +186,21 @@ h2 {
 @media (max-width: 700px) {
   .section-header { align-items: flex-start; flex-direction: column; }
   .winnings { padding: 52px 0; }
+  .winnings-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(82%, 82%);
+    gap: 14px;
+    margin-inline: -16px;
+    padding: 2px 16px 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 16px;
+    scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .winnings-grid::-webkit-scrollbar { display: none; }
+  .win-card { scroll-snap-align: start; scroll-snap-stop: always; }
 }
 </style>

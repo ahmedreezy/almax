@@ -56,8 +56,14 @@
         <div class="today-date-badge">{{ todayFormatted }}</div>
       </div>
 
-      <div v-if="displayedPicks.length" class="picks-grid">
-        <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }">
+      <div
+        v-if="displayedPicks.length"
+        class="picks-grid"
+        role="list"
+        aria-label="Almax prediction packages"
+        tabindex="0"
+      >
+        <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }" role="listitem">
           <div class="pick-img-bar">
             <img v-if="pick.imageUrl || pick.image_url" :src="resolvePhotoUrl(pick.imageUrl || pick.image_url)" :alt="pick.caption || 'prediction'" class="pick-card-img" style="cursor:zoom-in" @click="$lightbox.open(resolvePhotoUrl(pick.imageUrl || pick.image_url))" />
             <div v-else class="pick-img-placeholder">
@@ -91,7 +97,11 @@
           </div>
         </div>
       </div>
-      <div v-else class="picks-empty-state">
+      <div v-if="displayedPicks.length > 1" class="mobile-swipe-hint" aria-hidden="true">
+        <span class="mobile-swipe-hint__icon">↔</span>
+        <span>Swipe to see more packages</span>
+      </div>
+      <div v-if="!displayedPicks.length" class="picks-empty-state">
         <p>No active prediction packages are available right now.</p>
         <button class="pick-vip-btn" @click="openVipMenu()">👑 View Active Packages</button>
       </div>
@@ -125,7 +135,7 @@
         aria-modal="true"
         aria-label="Join VIP"
       >
-        <div class="mm-sheet">
+        <div ref="vipDialog" class="mm-sheet" tabindex="-1">
           <button class="mm-close" @click="closeVip" aria-label="Close">✕</button>
 
           <!-- ── STEP 1: Package Selection ── -->
@@ -626,33 +636,6 @@ import { getApiBaseUrl } from '../utils/apiBase'
 const API = getApiBaseUrl()
 const PENDING_PAYMENT_KEY = 'almax-pending-subscription-id'
 
-const STATIC_PICKS = [
-  {
-    id: 1, home: 'Man City', away: 'Arsenal',
-    competition: 'Premier League', kickoff: '20:00',
-    kitColor: '#6CABDD', kitNumber: '10', accent: '#6CABDD',
-    winProb: 78, imageUrl: ''
-  },
-  {
-    id: 2, home: 'Real Madrid', away: 'Barcelona',
-    competition: 'La Liga', kickoff: '21:00',
-    kitColor: '#FEBE10', kitNumber: '9', accent: '#FEBE10',
-    winProb: 82, imageUrl: ''
-  },
-  {
-    id: 3, home: 'Bayern Munich', away: 'Dortmund',
-    competition: 'Bundesliga', kickoff: '18:30',
-    kitColor: '#DC052D', kitNumber: '8', accent: '#DC052D',
-    winProb: 71, imageUrl: ''
-  },
-  {
-    id: 4, home: 'PSG', away: 'Lyon',
-    competition: 'Ligue 1', kickoff: '21:05',
-    kitColor: '#004170', kitNumber: '7', accent: '#004170',
-    winProb: 85, imageUrl: ''
-  }
-]
-
 export default {
   name: 'FeaturedSection',
   emits: ['vipOpened'],
@@ -665,9 +648,10 @@ export default {
     const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     return {
       todayFormatted: `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`,
-      todayPicks: [...STATIC_PICKS],
+      todayPicks: [],
       // VIP modal
       showVipMenu: false,
+      lastFocusedElement: null,
       vipStep: 1,
       vipCfg: { currency: 'UGX', whatsapp_link: '' },
       // Groups
@@ -792,6 +776,10 @@ export default {
         this.openVipMenu()
         this.$emit('vipOpened')
       }
+    },
+    showVipMenu(open) {
+      if (open) this.activateVipDialog()
+      else this.deactivateVipDialog()
     }
   },
   async mounted() {
@@ -832,7 +820,7 @@ export default {
     this._onPackageStorageUpdated = (event) => {
       if (event.key === 'almax-packages-updated') this.fetchGroups({ silent: true })
     }
-    this._onKeyDown = (e) => { if (e.key === 'Escape' && this.showVipMenu) this.closeVip() }
+    this._onKeyDown = this.handleVipKeyDown
     // "View My Subscriptions" buttons dispatch this to open the account-scoped view.
     this._openStatus = () => this.openMySubscriptions()
     window.addEventListener('user-logged-out', this._onLogout)
@@ -844,6 +832,7 @@ export default {
     document.addEventListener('open-vip-status', this._openStatus)
   },
   beforeUnmount() {
+    document.body.style.overflow = ''
     clearInterval(this._pollInterval)
     clearInterval(this._groupPollInterval)
     clearInterval(this._payPollInterval)
@@ -861,6 +850,38 @@ export default {
     document.removeEventListener('open-vip-status', this._openStatus)
   },
   methods: {
+    activateVipDialog() {
+      this.lastFocusedElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      this.$nextTick(() => this.$refs.vipDialog?.focus())
+    },
+    deactivateVipDialog() {
+      document.body.style.overflow = ''
+      this.$nextTick(() => this.lastFocusedElement?.focus?.())
+    },
+    handleVipKeyDown(event) {
+      if (!this.showVipMenu) return
+      if (event.key === 'Escape') {
+        this.closeVip()
+        return
+      }
+      if (event.key !== 'Tab' || !this.$refs.vipDialog) return
+      const focusable = [...this.$refs.vipDialog.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) {
+        event.preventDefault()
+        this.$refs.vipDialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    },
     resolvePhotoUrl(url) {
       if (!url) return ''
       if (/^(https?:|data:|blob:)/.test(url)) return url
@@ -966,9 +987,13 @@ export default {
             groupId: t.groupId ?? t.group_id ?? null,
           }))
         } else {
-          this.todayPicks = [...STATIC_PICKS]
+          this.todayPicks = []
         }
-      } catch { /* Server unavailable — static picks remain */ }
+      } catch {
+        // Never invent browser-only package relationships. Local demo picks are
+        // seeded through Laravel and therefore follow the production API path.
+        this.todayPicks = []
+      }
     },
     async fetchVipConfig() {
       try {
@@ -2155,7 +2180,23 @@ export default {
 
 /* Responsive */
 @media (max-width: 640px) {
-  .picks-grid { grid-template-columns: 1fr; }
+  .picks-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(82%, 82%);
+    gap: 14px;
+    margin-inline: -20px;
+    margin-bottom: 12px;
+    padding: 2px 20px 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 20px;
+    scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .picks-grid::-webkit-scrollbar { display: none; }
+  .pick-card { scroll-snap-align: start; scroll-snap-stop: always; }
   .sh-row     { flex-direction: column; align-items: flex-start; }
 }
 

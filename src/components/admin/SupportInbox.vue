@@ -1,9 +1,9 @@
 <template>
-  <div class="support-inbox">
+  <div :class="['support-inbox', { 'has-selection': selected }]">
     <aside class="conversation-list">
       <div class="inbox-toolbar">
         <input v-model="search" placeholder="Search customer…" @input="scheduleFetch" />
-        <select v-model="status" @change="fetchConversations"><option value="open">Open</option><option value="resolved">Resolved</option><option value="">All</option></select>
+        <select v-model="status" @change="fetchConversations(1)"><option value="open">Open</option><option value="resolved">Resolved</option><option value="">All</option></select>
       </div>
       <div v-if="loadingList" class="empty-state">Loading chats…</div>
       <button v-for="item in conversations" :key="item.id" :class="['conversation-item', { active: selected?.id === item.id }]" @click="selectConversation(item)">
@@ -16,11 +16,12 @@
         <span :class="['mode-pill', item.mode]">{{ item.mode }}</span>
       </button>
       <div v-if="!loadingList && !conversations.length" class="empty-state">No conversations found.</div>
+      <footer v-if="meta.total" class="conversation-pagination"><button type="button" :disabled="meta.current_page <= 1" @click="fetchConversations(meta.current_page - 1)">←</button><span>{{ meta.from || 0 }}–{{ meta.to || 0 }} of {{ meta.total }}</span><button type="button" :disabled="meta.current_page >= meta.last_page" @click="fetchConversations(meta.current_page + 1)">→</button><select v-model.number="perPage" aria-label="Conversations per page" @change="fetchConversations(1)"><option :value="10">10</option><option :value="25">25</option><option :value="50">50</option></select></footer>
     </aside>
 
     <section v-if="selected" class="conversation-detail">
       <header class="detail-header">
-        <div><span class="eyebrow">Platform customer</span><h3>{{ selected.contact?.display_name || selected.contact?.phone }}</h3><p>{{ selected.contact?.phone }} · {{ selected.category }} · {{ selected.priority }}</p></div>
+        <div><button type="button" class="mobile-back" @click="closeDetail">← Conversations</button><span class="eyebrow">Platform customer</span><h3>{{ selected.contact?.display_name || selected.contact?.phone }}</h3><p>{{ selected.contact?.phone }} · {{ selected.category }} · {{ selected.priority }}</p></div>
         <div class="detail-actions">
           <button v-if="selected.mode !== 'human' && selected.status !== 'resolved'" class="primary" @click="takeOver">Take over</button>
           <button v-if="selected.mode === 'human'" @click="releaseToAi">Return to AI</button>
@@ -57,7 +58,7 @@ import adminApi from '@/utils/adminApi'
 
 export default {
   name: 'SupportInbox',
-  data: () => ({ conversations: [], selected: null, search: '', status: 'open', loadingList: false, sending: false, reply: '', listTimer: null, detailTimer: null, searchTimer: null, attachmentUrls: {} }),
+  data: () => ({ conversations: [], selected: null, search: '', status: 'open', loadingList: false, sending: false, reply: '', listTimer: null, detailTimer: null, searchTimer: null, attachmentUrls: {}, perPage: 10, meta: { current_page: 1, last_page: 1, total: 0, from: 0, to: 0 } }),
   mounted() {
     this.fetchConversations()
     this.listTimer = setInterval(this.fetchConversations, 12000)
@@ -68,11 +69,12 @@ export default {
   },
   methods: {
     scheduleFetch() { clearTimeout(this.searchTimer); this.searchTimer = setTimeout(this.fetchConversations, 300) },
-    async fetchConversations() {
+    async fetchConversations(page = this.meta.current_page || 1) {
       this.loadingList = !this.conversations.length
       try {
-        const { data } = await adminApi.get('/api/support/admin/conversations', { params: { status: this.status || undefined, channel: 'platform', search: this.search || undefined, perPage: 100 } })
+        const { data } = await adminApi.get('/api/support/admin/conversations', { params: { page, status: this.status || undefined, channel: 'platform', search: this.search || undefined, per_page: this.perPage } })
         this.conversations = data.data || []
+        this.meta = { current_page: data.current_page || 1, last_page: data.last_page || 1, total: data.total || 0, from: data.from || 0, to: data.to || 0 }
         if (this.selected) {
           const updated = this.conversations.find(item => item.id === this.selected.id)
           if (updated) Object.assign(this.selected, updated)
@@ -84,6 +86,7 @@ export default {
       await this.fetchDetail(item.id)
       this.detailTimer = setInterval(() => this.fetchDetail(item.id, false), 3000)
     },
+    closeDetail() { clearInterval(this.detailTimer); this.selected = null },
     async fetchDetail(id, scroll = true) {
       const { data } = await adminApi.get(`/api/support/admin/conversations/${id}`)
       this.selected = data
@@ -118,5 +121,7 @@ export default {
 </script>
 
 <style scoped>
-.support-inbox{height:calc(100vh - 190px);min-height:560px;display:grid;grid-template-columns:340px minmax(0,1fr);overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:18px;background:#111}.conversation-list{overflow-y:auto;border-right:1px solid rgba(255,255,255,.08)}.inbox-toolbar{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:1fr 100px;gap:8px;padding:14px;background:#151515;border-bottom:1px solid rgba(255,255,255,.08)}input,select,textarea{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#0d0d0d;color:#fff;padding:10px;font:inherit}.conversation-item{width:100%;display:grid;grid-template-columns:40px 1fr auto;gap:10px;padding:14px;border:0;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;color:#fff;text-align:left;cursor:pointer}.conversation-item:hover,.conversation-item.active{background:rgba(255,215,0,.07)}.conversation-avatar{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#ffd700;color:#111;font-weight:900}.conversation-copy{min-width:0;display:grid;gap:3px}.conversation-copy strong{font-size:13px}.conversation-copy small{overflow:hidden;color:#888;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.conversation-copy em{color:#555;font-size:9px;font-style:normal}.mode-pill{align-self:start;padding:3px 6px;border-radius:20px;background:#242424;color:#aaa;font-size:8px;font-weight:900;text-transform:uppercase}.mode-pill.human{background:rgba(255,215,0,.14);color:#ffd700}.conversation-detail{min-width:0;display:grid;grid-template-rows:auto 1fr auto}.detail-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.08)}.eyebrow{color:#ffd700;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.detail-header h3{margin:4px 0;font-size:18px}.detail-header p{color:#777;font-size:11px}.detail-actions{display:flex;gap:8px;flex-wrap:wrap}.detail-actions button,.admin-reply button{padding:9px 12px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:#1b1b1b;color:#ddd;cursor:pointer}.primary{border-color:#ffd700!important;background:#ffd700!important;color:#111!important;font-weight:800}.admin-messages{overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:12px;background:#0b0b0b}.admin-messages article{max-width:72%;padding:11px 13px;border-radius:14px;background:#1b1b1b}.admin-messages article.customer-message{align-self:flex-end;background:#3b3210}.admin-messages span{color:#d4b310;font-size:9px;font-weight:800}.admin-messages p{margin:5px 0;white-space:pre-wrap;font-size:13px;line-height:1.5}.admin-messages time{color:#666;font-size:9px}.admin-attachments{display:grid;gap:7px;margin-top:7px}.admin-attachments img{max-width:320px;max-height:260px;object-fit:contain;border-radius:10px;cursor:zoom-in}.admin-attachments audio{max-width:100%}.admin-attachments small{color:#aaa;font-size:10px}.admin-reply{display:flex;gap:10px;padding:14px;border-top:1px solid rgba(255,255,255,.08);background:#151515}.admin-reply textarea{flex:1;resize:none}.admin-reply button:disabled{opacity:.4}.empty-state,.no-selection{display:grid;place-content:center;padding:30px;color:#777;text-align:center}.no-selection p{max-width:320px;margin-top:8px;font-size:12px}@media(max-width:850px){.support-inbox{height:auto;min-height:700px;grid-template-columns:1fr}.conversation-list{max-height:280px;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}.conversation-detail{min-height:620px}.admin-messages article{max-width:88%}.detail-header{align-items:flex-start;flex-direction:column}}
+.support-inbox{height:calc(100vh - 190px);min-height:560px;display:grid;grid-template-columns:340px minmax(0,1fr);overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:18px;background:#111}.conversation-list{overflow-y:auto;border-right:1px solid rgba(255,255,255,.08)}.inbox-toolbar{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:1fr 100px;gap:8px;padding:14px;background:#151515;border-bottom:1px solid rgba(255,255,255,.08)}input,select,textarea{border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#0d0d0d;color:#fff;padding:10px;font:inherit}.conversation-item{width:100%;display:grid;grid-template-columns:40px 1fr auto;gap:10px;padding:14px;border:0;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;color:#fff;text-align:left;cursor:pointer}.conversation-item:hover,.conversation-item.active{background:rgba(143,179,217,.07)}.conversation-avatar{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#8fb3d9;color:#111;font-weight:900}.conversation-copy{min-width:0;display:grid;gap:3px}.conversation-copy strong{font-size:13px}.conversation-copy small{overflow:hidden;color:#888;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.conversation-copy em{color:#555;font-size:9px;font-style:normal}.mode-pill{align-self:start;padding:3px 6px;border-radius:20px;background:#242424;color:#aaa;font-size:8px;font-weight:900;text-transform:uppercase}.mode-pill.human{background:rgba(143,179,217,.14);color:#8fb3d9}.conversation-detail{min-width:0;display:grid;grid-template-rows:auto 1fr auto}.detail-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.08)}.eyebrow{color:#8fb3d9;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.detail-header h3{margin:4px 0;font-size:18px}.detail-header p{color:#777;font-size:11px}.detail-actions{display:flex;gap:8px;flex-wrap:wrap}.detail-actions button,.admin-reply button{padding:9px 12px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:#1b1b1b;color:#ddd;cursor:pointer}.primary{border-color:#8fb3d9!important;background:#8fb3d9!important;color:#111!important;font-weight:800}.admin-messages{overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:12px;background:#0b0b0b}.admin-messages article{max-width:72%;padding:11px 13px;border-radius:14px;background:#1b1b1b}.admin-messages article.customer-message{align-self:flex-end;background:#18283a}.admin-messages span{color:#d4b310;font-size:9px;font-weight:800}.admin-messages p{margin:5px 0;white-space:pre-wrap;font-size:13px;line-height:1.5}.admin-messages time{color:#666;font-size:9px}.admin-attachments{display:grid;gap:7px;margin-top:7px}.admin-attachments img{max-width:320px;max-height:260px;object-fit:contain;border-radius:10px;cursor:zoom-in}.admin-attachments audio{max-width:100%}.admin-attachments small{color:#aaa;font-size:10px}.admin-reply{display:flex;gap:10px;padding:14px;border-top:1px solid rgba(255,255,255,.08);background:#151515}.admin-reply textarea{flex:1;resize:none}.admin-reply button:disabled{opacity:.4}.empty-state,.no-selection{display:grid;place-content:center;padding:30px;color:#777;text-align:center}.no-selection p{max-width:320px;margin-top:8px;font-size:12px}@media(max-width:850px){.support-inbox{height:auto;min-height:700px;grid-template-columns:1fr}.conversation-list{max-height:280px;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}.conversation-detail{min-height:620px}.admin-messages article{max-width:88%}.detail-header{align-items:flex-start;flex-direction:column}}
+.conversation-pagination{position:sticky;bottom:0;display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:7px;padding:10px 12px;background:#0d131a;color:#738091;font-size:9px}.conversation-pagination button,.conversation-pagination select{height:30px;border:1px solid #2c3744;border-radius:6px;background:#151d27;color:#aeb8c4}.conversation-pagination button{width:30px;cursor:pointer}.conversation-pagination button:disabled{opacity:.3}.conversation-pagination select{padding:0 5px}.mobile-back{display:none;border:0;background:transparent;color:#8fb3d9;font:inherit;font-size:11px;padding:0 0 10px;cursor:pointer}
+@media(max-width:850px){.support-inbox.has-selection .conversation-list,.support-inbox:not(.has-selection) .conversation-detail,.support-inbox:not(.has-selection) .no-selection{display:none}.support-inbox.has-selection{display:block}.support-inbox.has-selection .conversation-detail{display:grid}.support-inbox:not(.has-selection) .conversation-list{max-height:none;height:calc(100dvh - 185px)}.mobile-back{display:block}}
 </style>

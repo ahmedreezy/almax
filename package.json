@@ -26,11 +26,13 @@
     "testTimeout": 15000
   },
   "dependencies": {
+    "@fontsource-variable/outfit": "^5.3.0",
     "@uppy/core": "^6.3.0",
     "@uppy/dashboard": "^6.0.2",
     "@uppy/vue": "^4.0.1",
     "axios": "^1.15.0",
     "bcryptjs": "^3.0.3",
+    "chart.js": "^4.6.1",
     "core-js": "^3.8.3",
     "cors": "^2.8.5",
     "dotenv": "16.4.5",

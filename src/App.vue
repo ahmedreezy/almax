@@ -1,5 +1,6 @@
 <template>
-  <div id="app-root" :class="{ 'light-mode': isLight }">
+  <div id="app-root" :class="{ 'light-mode': isLight, 'is-admin-route': isAdminRoute, 'is-user-route': !isAdminRoute }">
+    <a v-if="!isAdminRoute" class="skip-link" href="#featured">Skip to today’s predictions</a>
     <!-- ── Theme Nav Bar ── -->
     <nav v-if="!isAdminRoute" class="theme-nav" aria-label="Appearance settings">
       <div class="theme-nav-inner">
@@ -48,6 +49,7 @@
 <script>
 import './assets/styles/tailwind.css'
 import './assets/styles/global.css'
+import './assets/styles/user-system.css'
 import UserProfile from './components/UserProfile.vue'
 import PhotoLightbox from './components/PhotoLightbox.vue'
 const { evaluateAppUpdate } = require('./utils/updateVersion')
@@ -97,10 +99,14 @@ export default {
       } else {
         this._detachSystemListener()
       }
+    },
+    isAdminRoute(val) {
+      document.body.classList.toggle('user-route', !val)
     }
   },
   mounted() {
     document.body.classList.toggle('light-mode', this.isLight)
+    document.body.classList.toggle('user-route', !this.isAdminRoute)
     if (this.themeMode === 'system') this._attachSystemListener()
     this.checkForUpdate()
     this._updateTimer = window.setInterval(this.checkForUpdate, 20000)
@@ -109,6 +115,7 @@ export default {
     document.addEventListener('visibilitychange', this.handleVisibilityChange)
   },
   beforeUnmount() {
+    document.body.classList.remove('user-route')
     this._detachSystemListener()
     window.clearInterval(this._updateTimer)
     window.removeEventListener('focus', this.checkForUpdate)
@@ -170,6 +177,8 @@ export default {
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 #app-root { min-height: 100vh; }
+.skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; padding: 9px 13px; border-radius: 8px; background: #f4cd47; color: #17140b; font-size: 12px; font-weight: 800; transform: translateY(-150%); transition: transform .18s ease; }
+.skip-link:focus { transform: translateY(0); }
 .powered-footnote {
   background: #050505;
   border-top: 1px solid rgba(255, 215, 0, 0.12);

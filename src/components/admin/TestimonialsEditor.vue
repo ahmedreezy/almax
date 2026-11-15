@@ -157,7 +157,7 @@ export default {
         await adminApi.delete('/api/testimonials/' + id)
         this.testimonials = this.testimonials.filter(t => t.id !== id)
       } catch {
-        alert('Delete failed.')
+        this.saveError = 'The testimonial could not be deleted.'
       }
     }
   }
@@ -166,11 +166,11 @@ export default {
 
 <style scoped>
 .editor { max-width: 920px; }
-.editor-desc { color: rgba(255,255,255,0.58); font-size: 14px; line-height: 1.7; margin-bottom: 22px; border-left: 3px solid #FFD700; padding: 12px 0 12px 16px; }
+.editor-desc { color: rgba(255,255,255,0.58); font-size: 14px; line-height: 1.7; margin-bottom: 22px; border-left: 0; padding: 12px 0 12px 16px; }
 .state-msg, .empty-state { background: #111; border-radius: 10px; color: #888; font-size: 14px; margin-bottom: 22px; padding: 16px; text-align: center; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; margin-bottom: 30px; }
-.media-item { background: #0e0e0e; border: 1px solid rgba(255, 215, 0, 0.12); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-.media-item:hover { border-color: rgba(255,215,0,0.32); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.38); }
+.media-item { background: #0e0e0e; border: 1px solid rgba(143,179,217, 0.12); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+.media-item:hover { border-color: rgba(143,179,217,0.32); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.38); }
 .media-img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; transition: transform 0.35s; }
 .media-item:hover .media-img { transform: scale(1.03); }
 .media-placeholder { aspect-ratio: 3 / 4; display: flex; align-items: center; justify-content: center; color: #555; background: #080808; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
@@ -182,7 +182,7 @@ export default {
 .add-title { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; margin: 0 0 18px; }
 .editor-form { display: flex; flex-direction: column; gap: 16px; }
 .actions-row { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
-.save-btn, .edit-btn { background: linear-gradient(135deg, #FFD700, #FFA500); border: none; border-radius: 9px; color: #000; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 40px; padding: 10px 18px; }
+.save-btn, .edit-btn { background: linear-gradient(135deg, #8FB3D9, #FFA500); border: none; border-radius: 9px; color: #000; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 40px; padding: 10px 18px; }
 .ghost-btn, .delete-btn { background: #1a1a1a; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; color: #ddd; cursor: pointer; font-size: 13px; font-weight: 700; padding: 10px 14px; }
 .delete-btn { color: #ff8a65; }
 .save-btn:disabled { cursor: not-allowed; opacity: 0.6; }

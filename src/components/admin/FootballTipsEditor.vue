@@ -212,7 +212,7 @@ export default {
         await adminApi.delete('/api/football-tips/' + id)
         this.tips = this.tips.filter(t => t.id !== id)
       } catch {
-        alert('Delete failed. Make sure the server is running.')
+        this.saveError = 'The prediction could not be deleted.'
       }
     }
   }
@@ -221,31 +221,31 @@ export default {
 
 <style scoped>
 .editor { max-width: 920px; }
-.editor-desc { color: rgba(255,255,255,0.58); font-size: 14px; line-height: 1.7; margin-bottom: 22px; border-left: 3px solid #FFD700; padding: 12px 0 12px 16px; }
+.editor-desc { color: rgba(255,255,255,0.58); font-size: 14px; line-height: 1.7; margin-bottom: 22px; border-left: 0; padding: 12px 0 12px 16px; }
 .state-msg, .empty-state { background: #111; border-radius: 10px; color: #888; font-size: 14px; margin-bottom: 22px; padding: 16px; text-align: center; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; margin-bottom: 30px; }
-.media-item { background: #0e0e0e; border: 1px solid rgba(255, 215, 0, 0.12); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-.media-item:hover { border-color: rgba(255,215,0,0.32); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.38); }
+.media-item { background: #0e0e0e; border: 1px solid rgba(143,179,217, 0.12); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+.media-item:hover { border-color: rgba(143,179,217,0.32); transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.38); }
 .media-img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; transition: transform 0.35s; }
 .media-item:hover .media-img { transform: scale(1.03); }
 .media-placeholder { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; color: #555; background: #080808; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
 .media-body { padding: 12px 14px 8px; flex: 1; }
 .media-body p { color: #fff; font-size: 13px; line-height: 1.55; margin: 0 0 6px; }
-.media-body span { color: #FFD700; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+.media-body span { color: #8FB3D9; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
 .card-actions { display: flex; gap: 8px; padding: 0 12px 12px; }
 .edit-panel { padding: 14px; }
-.pkg-select { width: 100%; background: #111; border: 1px solid rgba(255,215,0,0.2); border-radius: 8px; color: #fff; font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer; margin-top: 4px; }
+.pkg-select { width: 100%; background: #111; border: 1px solid rgba(143,179,217,0.2); border-radius: 8px; color: #fff; font-size: 13px; padding: 8px 10px; outline: none; cursor: pointer; margin-top: 4px; }
 .pkg-select option { background: #111; }
-.pkg-link-badge { display: block; margin-top: 6px; font-size: 11px; font-weight: 700; color: #FFD700; letter-spacing: 0.3px; }
+.pkg-link-badge { display: block; margin-top: 6px; font-size: 11px; font-weight: 700; color: #8FB3D9; letter-spacing: 0.3px; }
 .pkg-link-none { color: #555; font-weight: 400; }
 .add-section { margin-top: 28px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.07); }
 .add-title { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; margin: 0 0 18px; }
 .editor-form { display: flex; flex-direction: column; gap: 16px; }
 .prob-field { display: flex; flex-direction: column; gap: 8px; }
 .prob-field label { color: #888; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-.prob-field input { background: #1a1a1a; border: 1px solid rgba(255, 215, 0, 0.16); border-radius: 9px; color: #fff; font-size: 14px; max-width: 180px; outline: none; padding: 11px 13px; }
+.prob-field input { background: #1a1a1a; border: 1px solid rgba(143,179,217, 0.16); border-radius: 9px; color: #fff; font-size: 14px; max-width: 180px; outline: none; padding: 11px 13px; }
 .actions-row { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
-.save-btn, .edit-btn { background: linear-gradient(135deg, #FFD700, #FFA500); border: none; border-radius: 9px; color: #000; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 40px; padding: 10px 18px; }
+.save-btn, .edit-btn { background: linear-gradient(135deg, #8FB3D9, #FFA500); border: none; border-radius: 9px; color: #000; cursor: pointer; font-size: 13px; font-weight: 900; min-height: 40px; padding: 10px 18px; }
 .ghost-btn, .delete-btn { background: #1a1a1a; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; color: #ddd; cursor: pointer; font-size: 13px; font-weight: 700; padding: 10px 14px; }
 .delete-btn { color: #ff8a65; }
 .save-btn:disabled { cursor: not-allowed; opacity: 0.6; }

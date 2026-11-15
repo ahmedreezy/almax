@@ -574,7 +574,7 @@ export default {
   line-height: 1.7;
   background: rgba(255,255,255,0.035);
   border: 1px solid rgba(255,255,255,0.08);
-  border-left: 3px solid #FFD700;
+  border-left: 0;
   border-radius: 12px;
   padding: 16px 18px;
   margin-bottom: 24px;
@@ -626,7 +626,7 @@ export default {
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
-.badge-daily   { background: rgba(255,215,0,0.15); color: #FFD700; }
+.badge-daily   { background: rgba(143,179,217,0.15); color: #8FB3D9; }
 .badge-weekly  { background: rgba(100,210,255,0.15); color: #64d2ff; }
 .badge-monthly { background: rgba(120,255,150,0.15); color: #78ff96; }
 .badge-special { background: rgba(255,100,100,0.15); color: #ff6464; }
@@ -663,7 +663,7 @@ export default {
   font-size: 12px;
   outline: none;
 }
-.field-url:focus, .field-code:focus, .field-sm:focus, .field-deadline:focus { border-color: rgba(255,215,0,0.4); }
+.field-url:focus, .field-code:focus, .field-sm:focus, .field-deadline:focus { border-color: rgba(143,179,217,0.4); }
 .field-hint { display: block; font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 3px; }
 .field-hint--expired { color: #ff8a80; font-weight: 700; }
 
@@ -686,23 +686,23 @@ export default {
   border-radius: 50%;
   transition: transform 0.2s, background 0.2s;
 }
-.toggle input:checked + .toggle-track { background: #FFD700; }
+.toggle input:checked + .toggle-track { background: #8FB3D9; }
 .toggle input:checked + .toggle-track::after { transform: translateX(16px); background: #000; }
 
 /* Buttons */
 .btn-save {
-  background: rgba(255,215,0,0.12);
-  border: 1px solid rgba(255,215,0,0.3);
+  background: rgba(143,179,217,0.12);
+  border: 1px solid rgba(143,179,217,0.3);
   border-radius: 7px;
   padding: 7px 12px;
-  color: #FFD700;
+  color: #8FB3D9;
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
   transition: background 0.2s;
   margin-right: 6px;
 }
-.btn-save:hover:not(:disabled) { background: rgba(255,215,0,0.22); }
+.btn-save:hover:not(:disabled) { background: rgba(143,179,217,0.22); }
 .btn-save:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn-del {
   background: rgba(255,82,82,0.1);
@@ -720,8 +720,8 @@ export default {
 /* ── Special odds panel ── */
 .special-panel {
   margin-top: 28px;
-  background: linear-gradient(135deg, rgba(255,215,0,0.07), rgba(255,255,255,0.025));
-  border: 1px solid rgba(255,215,0,0.18);
+  background: linear-gradient(135deg, rgba(143,179,217,0.07), rgba(255,255,255,0.025));
+  border: 1px solid rgba(143,179,217,0.18);
   border-radius: 16px;
   padding: 22px 24px 24px;
 }
@@ -734,7 +734,7 @@ export default {
 }
 .panel-kicker {
   display: block;
-  color: #FFD700;
+  color: #8FB3D9;
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 1.5px;
@@ -781,7 +781,7 @@ export default {
   outline: none;
   padding: 10px 12px;
 }
-.special-field input:focus { border-color: rgba(255,215,0,0.42); }
+.special-field input:focus { border-color: rgba(143,179,217,0.42); }
 .special-toggle-field { align-items: flex-start; }
 .special-actions { display: flex; align-items: center; gap: 12px; grid-column: 1 / -1; margin-top: 4px; }
 .btn-save-large { padding: 10px 18px; font-size: 13px; }
@@ -812,9 +812,9 @@ export default {
   width: 100%;
 }
 .add-field select option { background: #1a1a2e; }
-.add-field input:focus, .add-field select:focus { border-color: rgba(255,215,0,0.4); }
+.add-field input:focus, .add-field select:focus { border-color: rgba(143,179,217,0.4); }
 .btn-add {
-  background: linear-gradient(135deg, #FFD700, #FFA500);
+  background: linear-gradient(135deg, #8FB3D9, #FFA500);
   color: #000;
   border: none;
   border-radius: 10px;
@@ -833,15 +833,15 @@ export default {
 /* Package photo upload */
 .td-photo { width: 90px; }
 .photo-upload-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.pkg-photo-thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,215,0,0.2); display: block; }
+.pkg-photo-thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(143,179,217,0.2); display: block; }
 .photo-file-input { display: none; }
-.photo-upload-btn { display: inline-block; background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.25); border-radius: 6px; color: #FFD700; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
-.photo-upload-btn:hover { background: rgba(255,215,0,0.2); }
+.photo-upload-btn { display: inline-block; background: rgba(143,179,217,0.1); border: 1px solid rgba(143,179,217,0.25); border-radius: 6px; color: #8FB3D9; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+.photo-upload-btn:hover { background: rgba(143,179,217,0.2); }
 .photo-delete-btn { display: inline-block; background: rgba(255,82,82,0.1); border: 1px solid rgba(255,82,82,0.25); border-radius: 6px; color: #ff5252; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
 .photo-delete-btn:hover { background: rgba(255,82,82,0.2); }
 /* Special odds photo block */
-.special-photo-block { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px dashed rgba(255,215,0,0.18); border-radius: 10px; width: fit-content; }
-.special-photo-thumb { width: 80px; height: 58px; object-fit: cover; border-radius: 7px; border: 1px solid rgba(255,215,0,0.2); flex-shrink: 0; display: block; }
+.special-photo-block { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px dashed rgba(143,179,217,0.18); border-radius: 10px; width: fit-content; }
+.special-photo-thumb { width: 80px; height: 58px; object-fit: cover; border-radius: 7px; border: 1px solid rgba(143,179,217,0.2); flex-shrink: 0; display: block; }
 .special-photo-btns { display: flex; flex-direction: column; gap: 7px; }
 
 @media (max-width: 1100px) {

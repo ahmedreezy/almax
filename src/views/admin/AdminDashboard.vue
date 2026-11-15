@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard" @pointermove="onDashboardPointerMove">
     <button
       v-if="mobileMenuOpen"
       class="mobile-menu-backdrop"
@@ -9,29 +9,28 @@
     ></button>
 
     <!-- Sidebar -->
-    <aside id="admin-dashboard-nav" :class="['sidebar', { 'is-mobile-open': mobileMenuOpen }]">
+    <aside id="admin-dashboard-nav" :class="['sidebar', { 'is-mobile-open': mobileMenuOpen, 'is-collapsed': sidebarCollapsed }]">
       <div class="sidebar-logo">
         <img class="brand-mark" src="@/assets/almax-mark.png" alt="Almax logo" />
         <span class="logo-text">ALMAX<span>CONTROL</span></span>
         <button class="mobile-menu-close" type="button" aria-label="Close dashboard navigation" @click="closeMobileMenu">
           <span></span><span></span>
         </button>
+        <button class="sidebar-collapse" type="button" :aria-label="sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'" @click="toggleSidebar">{{ sidebarCollapsed ? '›' : '‹' }}</button>
       </div>
       <p class="sidebar-role">Administration Suite</p>
 
       <nav class="sidebar-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          :class="['nav-item', { active: activeSection === item.id }]"
-          @click="selectSection(item.id)"
-        >
-          <span class="nav-icon" v-html="navIcons[item.id]"></span>
-          <span class="nav-copy">
-            <span class="nav-label">{{ item.label }}</span>
-            <span class="nav-desc">{{ item.desc }}</span>
-          </span>
-        </button>
+        <template v-for="(item, index) in navItems" :key="item.id">
+          <p v-if="index === 0 || navItems[index - 1].group !== item.group" class="nav-group">{{ item.group }}</p>
+          <button :class="['nav-item', { active: activeSection === item.id }]" @click="selectSection(item.id)">
+            <span class="nav-icon" v-html="navIcons[item.id]"></span>
+            <span class="nav-copy">
+              <span class="nav-label">{{ item.label }}</span>
+              <span class="nav-desc">{{ item.desc }}</span>
+            </span>
+          </button>
+        </template>
       </nav>
 
       <div class="admin-strip">
@@ -100,6 +99,8 @@
       </header>
 
       <div class="panel-body">
+        <OwnerOverview       v-if="activeSection === 'overview'" @navigate="selectSection" />
+        <FinancialReport     v-if="activeSection === 'financial-report'" />
         <FreeOdd2Editor      v-if="activeSection === 'free-odd2'" />
         <FootballTipsEditor  v-if="activeSection === 'football-tips'" />
         <RecentWinsEditor    v-if="activeSection === 'recent-wins'" />
@@ -117,6 +118,9 @@
 
 <script>
 import axios from 'axios'
+import { defineAsyncComponent } from 'vue'
+import adminApi from '../../utils/adminApi'
+import { disableAdminPreview, isAdminPreviewEnabled } from '../../utils/adminPreviewMode'
 import FreeOdd2Editor     from '../../components/admin/FreeOdd2Editor.vue'
 import FootballTipsEditor  from '../../components/admin/FootballTipsEditor.vue'
 import RecentWinsEditor    from '../../components/admin/RecentWinsEditor.vue'
@@ -127,10 +131,12 @@ import TestimonialsEditor  from '../../components/admin/TestimonialsEditor.vue'
 import UsersEditor         from '../../components/admin/UsersEditor.vue'
 import SupportInbox        from '../../components/admin/SupportInbox.vue'
 import SitePreview         from '../../components/admin/SitePreview.vue'
+import FinancialReport     from '../../components/admin/FinancialReport.vue'
+const OwnerOverview = defineAsyncComponent(() => import('../../components/admin/OwnerOverview.vue'))
 
 export default {
   name: 'AdminDashboard',
-  components: { FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, WalletOverview, TestimonialsEditor, UsersEditor, SupportInbox, SitePreview },
+  components: { OwnerOverview, FinancialReport, FreeOdd2Editor, FootballTipsEditor, RecentWinsEditor, VipPackagesEditor, PaymentsOverview, WalletOverview, TestimonialsEditor, UsersEditor, SupportInbox, SitePreview },
   directives: {
     'click-outside': {
       mounted(el, binding) {
@@ -143,26 +149,31 @@ export default {
   data() {
     const d = new Date()
     return {
-      activeSection: 'free-odd2',
+      activeSection: 'overview',
+      pointerFrame: null,
       todayDate: d.toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
       navItems: [
-        { id: 'free-odd2',     label: 'Free Daily Tip',     desc: 'Public daily feature' },
-        { id: 'football-tips', label: 'Almax Predictions',  desc: 'Prediction feed' },
-        { id: 'recent-wins',   label: 'Recent Wins',        desc: 'Published wins' },
-        { id: 'vip-packages',  label: 'VIP Packages',       desc: 'Pricing and betslips' },
-        { id: 'payments',      label: 'Payments',           desc: 'Subscriptions and revenue' },
-        { id: 'wallet',        label: 'Wallet & Payouts',   desc: 'Relworx funds' },
-        { id: 'users',         label: 'Members',            desc: 'Registered accounts' },
-        { id: 'support',       label: 'Customer Chats',     desc: 'AI conversations and takeover' },
-        { id: 'testimonials',  label: 'Testimonials',       desc: 'Social proof content' },
-        { id: 'preview',       label: 'Site Preview',       desc: 'Public site view' }
+        { id: 'overview',      group: 'Overview',   label: 'Owner Overview',      desc: 'Position and attention' },
+        { id: 'free-odd2',     group: 'Content',    label: 'Free Daily Tip',      desc: 'Public daily feature' },
+        { id: 'football-tips', group: 'Content',    label: 'Almax Predictions',   desc: 'Prediction feed' },
+        { id: 'recent-wins',   group: 'Content',    label: 'Recent Wins',         desc: 'Published wins' },
+        { id: 'vip-packages',  group: 'Content',    label: 'VIP Packages',        desc: 'Pricing and betslips' },
+        { id: 'payments',      group: 'Operations', label: 'Daily Payments',      desc: 'Today’s payment activity' },
+        { id: 'financial-report', group: 'Operations', label: 'Financial Report', desc: 'Revenue and performance' },
+        { id: 'wallet',        group: 'Operations', label: 'Wallet & Payouts',    desc: 'Relworx funds' },
+        { id: 'users',         group: 'Customers',  label: 'Members',             desc: 'Registered accounts' },
+        { id: 'support',       group: 'Customers',  label: 'Customer Chats',      desc: 'Conversations and takeover' },
+        { id: 'testimonials',  group: 'Website',    label: 'Testimonials',        desc: 'Social proof content' },
+        { id: 'preview',       group: 'Website',    label: 'Site Preview',        desc: 'Public site view' }
       ],
       navIcons: {
+        'overview':      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>',
         'free-odd2':     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14"/></svg>',
         'football-tips': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
         'recent-wins':   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8m-4-4v4M5 3h14v5a7 7 0 01-14 0V3z"/><path d="M5 6H3a2 2 0 000 4h2M19 6h2a2 2 0 010 4h-2"/></svg>',
         'vip-packages':  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
         'payments':      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+        'financial-report': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/><path d="m4 8 6-4 6 7 5-5"/></svg>',
         'wallet':        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7V5a2 2 0 00-2-2H5a3 3 0 000 6h15v10H5a3 3 0 010-6h15"/><circle cx="16" cy="14" r="1"/></svg>',
         'users':         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
         'support':       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/><path d="M8 9h8M8 13h5"/></svg>',
@@ -174,7 +185,8 @@ export default {
       showNotifDropdown: false,
       notifPollInterval: null,
       focusSubId: null,
-      mobileMenuOpen: false
+      mobileMenuOpen: false,
+      sidebarCollapsed: localStorage.getItem('adminSidebarCollapsed') === 'true'
     }
   },
   computed: {
@@ -182,26 +194,50 @@ export default {
       return this.navItems.find(n => n.id === this.activeSection) || {}
     }
   },
+  watch: {
+    '$route.query.section'(section) {
+      if (this.navItems.some(item => item.id === section)) this.activeSection = section
+    }
+  },
   async mounted() {
+    const requestedSection = String(this.$route.query.section || '')
+    if (this.navItems.some(item => item.id === requestedSection)) this.activeSection = requestedSection
     window.addEventListener('keydown', this.onKeydown)
     window.addEventListener('resize', this.onViewportChange)
     await this.fetchNotifCount()
     this.notifPollInterval = setInterval(this.fetchNotifCount, 30000)
   },
   beforeUnmount() {
+    if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
     if (this.notifPollInterval) clearInterval(this.notifPollInterval)
     window.removeEventListener('keydown', this.onKeydown)
     window.removeEventListener('resize', this.onViewportChange)
     document.body.style.overflow = ''
   },
   methods: {
+    onDashboardPointerMove(event) {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      const tile = event.target.closest?.('.metric, .finance-metrics article, .balance-grid article, .overview-panel, .report-surface')
+      if (!tile) return
+      if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
+      const clientX = event.clientX
+      const clientY = event.clientY
+      this.pointerFrame = requestAnimationFrame(() => {
+        const rect = tile.getBoundingClientRect()
+        tile.style.setProperty('--pointer-x', `${clientX - rect.left}px`)
+        tile.style.setProperty('--pointer-y', `${clientY - rect.top}px`)
+        this.pointerFrame = null
+      })
+    },
     selectSection(section) {
       this.activeSection = section
+      if (this.$route.query.section !== section) this.$router.push({ query: { ...this.$route.query, section } })
       this.closeMobileMenu()
     },
     toggleMobileMenu() {
       this.mobileMenuOpen ? this.closeMobileMenu() : this.openMobileMenu()
     },
+    toggleSidebar() { this.sidebarCollapsed = !this.sidebarCollapsed; localStorage.setItem('adminSidebarCollapsed', String(this.sidebarCollapsed)) },
     openMobileMenu() {
       this.mobileMenuOpen = true
       document.body.style.overflow = 'hidden'
@@ -218,25 +254,26 @@ export default {
     },
     logout() {
       localStorage.removeItem('adminToken')
+      disableAdminPreview()
       this.$router.push('/admin/login')
     },
     async fetchNotifCount() {
       try {
         const token = localStorage.getItem('adminToken')
-        if (!token) return
-        const { data } = await axios.get('/api/notifications/unread-count', {
-          headers: { Authorization: 'Bearer ' + token }
-        })
+      if (!token && !isAdminPreviewEnabled()) return
+      const { data } = isAdminPreviewEnabled()
+        ? await adminApi.get('/api/notifications/unread-count')
+        : await axios.get('/api/notifications/unread-count', { headers: { Authorization: 'Bearer ' + token } })
         this.unreadCount = data.count || 0
       } catch { /* silent */ }
     },
     async fetchNotifications() {
       try {
         const token = localStorage.getItem('adminToken')
-        if (!token) return
-        const { data } = await axios.get('/api/notifications', {
-          headers: { Authorization: 'Bearer ' + token }
-        })
+        if (!token && !isAdminPreviewEnabled()) return
+        const { data } = isAdminPreviewEnabled()
+          ? await adminApi.get('/api/notifications')
+          : await axios.get('/api/notifications', { headers: { Authorization: 'Bearer ' + token } })
         this.notifications = data || []
       } catch { /* silent */ }
     },
@@ -249,21 +286,19 @@ export default {
       this.showNotifDropdown = false
       try {
         const token = localStorage.getItem('adminToken')
-        await axios.patch('/api/notifications/' + notif.id + '/read', {}, {
-          headers: { Authorization: 'Bearer ' + token }
-        })
+        if (isAdminPreviewEnabled()) await adminApi.patch('/api/notifications/' + notif.id + '/read')
+        else await axios.patch('/api/notifications/' + notif.id + '/read', {}, { headers: { Authorization: 'Bearer ' + token } })
         notif.is_read = true
         this.unreadCount = Math.max(0, this.unreadCount - 1)
       } catch { /* silent */ }
       this.focusSubId = notif.subscription_id || null
-      this.activeSection = 'payments'
+      this.selectSection('payments')
     },
     async markAllRead() {
       try {
         const token = localStorage.getItem('adminToken')
-        await axios.patch('/api/notifications/read-all', {}, {
-          headers: { Authorization: 'Bearer ' + token }
-        })
+        if (isAdminPreviewEnabled()) await adminApi.patch('/api/notifications/read-all')
+        else await axios.patch('/api/notifications/read-all', {}, { headers: { Authorization: 'Bearer ' + token } })
         this.notifications.forEach(n => { n.is_read = true })
         this.unreadCount = 0
       } catch { /* silent */ }
@@ -283,35 +318,41 @@ export default {
 </script>
 
 <style scoped>
+@font-face {
+  font-family: 'Outfit Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('~@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2') format('woff2-variations');
+}
 .dashboard {
   display: flex;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(255,215,0,0.08), transparent 34%),
-    linear-gradient(135deg, #070707 0%, #0e0e0e 46%, #111 100%);
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  color: var(--white);
+  min-height: 100dvh;
+  background: #0b1017;
+  font-family: 'Outfit Variable', 'Avenir Next', system-ui, sans-serif;
+  color: #e7ecf1;
 }
 /* Fixed-frame (sticky sidebar) only on screens wide enough to show the sidebar */
 @media (min-width: 769px) {
-  .dashboard { height: 100vh; overflow: hidden; }
+  .dashboard { height: 100dvh; overflow: hidden; }
 }
 
 /* ── Sidebar ─────────────────────────────────────────────── */
 .sidebar {
-  width: 280px;
+  width: 264px;
   flex-shrink: 0;
-  background: rgba(14,14,14,0.96);
-  border-right: 1px solid rgba(255,255,255,0.08);
+  background: #0e141c;
+  border-right: 0;
   display: flex;
   flex-direction: column;
-  padding: 30px 18px 24px;
+  padding: 25px 16px 20px;
 }
+.sidebar-collapse{margin-left:auto;width:28px;height:28px;border:0;border-radius:6px;background:#18212b;color:#8b97a5;font-size:20px;cursor:pointer}.sidebar-collapse:hover{background:#202b37;color:#a8c6e3}.sidebar.is-collapsed{width:82px;padding-inline:12px}.sidebar.is-collapsed .sidebar-logo{justify-content:center;padding-inline:0}.sidebar.is-collapsed :is(.logo-text,.sidebar-role,.nav-copy,.nav-group,.admin-strip>span:not(.admin-avatar),.logout-btn){display:none}.sidebar.is-collapsed .sidebar-collapse{position:absolute;top:72px;margin:0}.sidebar.is-collapsed .sidebar-nav{margin-top:34px}.sidebar.is-collapsed .nav-item{justify-content:center;padding-inline:0}.sidebar.is-collapsed .nav-icon{width:38px;height:38px}.sidebar.is-collapsed .admin-strip{justify-content:center;padding:10px 0;background:transparent}.sidebar{transition:width .22s ease,transform .24s ease}
 .mobile-menu-toggle,
 .mobile-menu-close,
 .mobile-menu-backdrop { display: none; }
 @media (min-width: 769px) {
-  .sidebar { height: 100vh; overflow-y: auto; }
+  .sidebar { height: 100dvh; overflow-y: auto; }
 }
 
 .sidebar-logo {
@@ -338,8 +379,8 @@ export default {
   letter-spacing: 2px;
   line-height: 1.05;
 }
-.logo-text span { color: #FFD700; font-size: 10px; letter-spacing: 2.8px; margin-top: 5px; }
-.gold { color: #FFD700; }
+.logo-text span { color: #8fb3d9; font-size: 10px; letter-spacing: 2.8px; margin-top: 5px; }
+.gold { color: #8fb3d9; }
 
 .sidebar-role {
   font-size: 11px;
@@ -353,16 +394,18 @@ export default {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   flex: 1;
 }
+.nav-group { margin: 16px 10px 6px; color: #4f5c6b; font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.nav-group:first-child { margin-top: 2px; }
 
 .nav-item {
   display: flex;
   align-items: flex-start;
   gap: 13px;
-  padding: 13px 14px;
-  border-radius: 12px;
+  padding: 10px 11px;
+  border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
   color: rgba(255,255,255,0.58);
@@ -370,11 +413,11 @@ export default {
   text-align: left;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
-.nav-item:hover { background: rgba(255,255,255,0.045); color: var(--white); }
+.nav-item:hover { background: #151d27; color: #e6ebef; transform: translateX(2px); }
 .nav-item.active {
-  background: rgba(255,215,0,0.1);
-  color: #FFD700;
-  border-color: rgba(255,215,0,0.25);
+  background: #1a1d1d;
+  color: #d8bf86;
+  border-color: #51472f;
 }
 .nav-icon {
   display: inline-flex;
@@ -382,17 +425,17 @@ export default {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  background: #18212b;
   color: rgba(255,255,255,0.55);
   flex-shrink: 0;
 }
 .nav-icon svg { display: block; }
-.nav-item.active .nav-icon { background: #FFD700; color: #050505; }
+.nav-item.active .nav-icon { background: #8fb3d9; color: #14120d; }
 .nav-copy { display: flex; flex-direction: column; gap: 2px; }
-.nav-label { font-size: 14px; font-weight: 800; color: inherit; }
+.nav-label { font-size: 12px; font-weight: 650; color: inherit; }
 .nav-desc { font-size: 11px; color: rgba(255,255,255,0.36); line-height: 1.3; }
-.nav-item.active .nav-desc { color: rgba(255,215,0,0.62); }
+.nav-item.active .nav-desc { color: rgba(143,179,217,0.62); }
 
 .admin-strip {
   display: flex;
@@ -401,8 +444,8 @@ export default {
   margin-top: 18px;
   padding: 14px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: #121a23;
+  border: 1px solid #27313d;
 }
 .admin-avatar {
   width: 34px;
@@ -411,8 +454,8 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255,215,0,0.16);
-  color: #FFD700;
+  background: rgba(143,179,217,0.16);
+  color: #8fb3d9;
   font-size: 13px;
   font-weight: 900;
 }
@@ -448,12 +491,12 @@ export default {
   gap: 24px;
   padding: 28px 36px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(20,20,20,0.82);
+  background: rgba(14,20,28,0.92);
   backdrop-filter: blur(12px);
 }
 .header-intro { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .section-kicker {
-  color: #FFD700;
+  color: #8fb3d9;
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 1.8px;
@@ -462,7 +505,8 @@ export default {
 }
 .section-title {
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 560;
+  letter-spacing: -.025em;
   color: var(--white);
   margin: 0;
 }
@@ -491,7 +535,7 @@ export default {
   background: rgba(255,255,255,0.04);
   cursor: pointer;
 }
-.notif-bell:hover { border-color: rgba(255,215,0,0.28); background: rgba(255,215,0,0.08); }
+.notif-bell:hover { border-color: rgba(143,179,217,0.28); background: rgba(143,179,217,0.08); }
 .bell-shape {
   position: relative;
   display: block;
@@ -519,7 +563,7 @@ export default {
   bottom: -10px;
   width: 5px;
   height: 5px;
-  background: #FFD700;
+  background: #8FB3D9;
   border-radius: 50%;
   transform: translateX(-50%);
 }
@@ -564,7 +608,7 @@ export default {
 .notif-read-all {
   border: none;
   background: transparent;
-  color: #FFD700;
+  color: #8FB3D9;
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
@@ -572,7 +616,7 @@ export default {
 .notif-empty { padding: 22px 16px; color: rgba(255,255,255,0.42); font-size: 13px; }
 .notif-item { padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; }
 .notif-item:hover { background: rgba(255,255,255,0.04); }
-.notif-item.unread { background: rgba(255,215,0,0.05); }
+.notif-item.unread { background: rgba(143,179,217,0.05); }
 .notif-user { color: #fff; font-size: 13px; font-weight: 800; margin-bottom: 6px; }
 .notif-detail { display: flex; align-items: center; gap: 8px; }
 .notif-plan { color: rgba(255,255,255,0.45); font-size: 11px; text-transform: uppercase; }
@@ -585,7 +629,7 @@ export default {
 .panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 34px 36px;
+  padding: 32px clamp(20px, 3vw, 42px) 48px;
 }
 
 /* ── Responsive ──────────────────────────────────────────── */
@@ -603,6 +647,7 @@ export default {
     transition: transform 0.24s ease;
     box-shadow: 24px 0 70px rgba(0,0,0,0.5);
   }
+  .sidebar-collapse{display:none}.sidebar.is-collapsed{width:min(86vw,320px);padding:22px 16px 20px}.sidebar.is-collapsed .logo-text,.sidebar.is-collapsed .nav-copy{display:flex}.sidebar.is-collapsed :is(.sidebar-role,.nav-group,.admin-strip>span:not(.admin-avatar),.logout-btn){display:block}.sidebar.is-collapsed .sidebar-logo{justify-content:flex-start;padding:0 8px 18px}.sidebar.is-collapsed .sidebar-nav{margin-top:0}.sidebar.is-collapsed .nav-item{justify-content:flex-start;padding:10px 11px}.sidebar.is-collapsed .nav-icon{width:32px;height:32px}.sidebar.is-collapsed .admin-strip{justify-content:flex-start;padding:14px;background:#121a23}
   .sidebar.is-mobile-open { transform: translateX(0); }
   .sidebar-logo { padding-right: 2px; }
   .mobile-menu-backdrop {
@@ -625,11 +670,11 @@ export default {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    border: 1px solid rgba(255,215,0,0.28);
+    border: 1px solid rgba(143,179,217,0.28);
     border-radius: 11px;
-    background: rgba(255,215,0,0.08);
+    background: rgba(143,179,217,0.08);
   }
-  .mobile-menu-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #FFD700; }
+  .mobile-menu-toggle span { width: 18px; height: 2px; border-radius: 2px; background: #8FB3D9; }
   .mobile-menu-close {
     display: block;
     position: relative;
@@ -655,3 +700,4 @@ export default {
   .notif-dropdown { right: -8px; width: min(320px, calc(100vw - 32px)); }
 }
 </style>
+<style src="../../assets/styles/admin-system.css"></style>

@@ -1,7 +1,7 @@
 <template>
-  <div class="overlay" @click.self="$emit('close')">
-    <div class="modal">
-      <button class="close-btn" @click="$emit('close')" aria-label="Close">✕</button>
+  <div class="overlay" role="dialog" aria-modal="true" aria-label="Today’s free tip" @click.self="close">
+    <div ref="dialog" class="modal" tabindex="-1">
+      <button class="close-btn" @click="close" aria-label="Close">✕</button>
 
       <!-- ── Photo hero ── -->
       <div class="hero-wrap">
@@ -51,13 +51,40 @@ export default {
     }
   },
   async mounted() {
+    this._lastFocusedElement = document.activeElement
+    this._onKeyDown = this.handleKeyDown
+    document.addEventListener('keydown', this._onKeyDown)
+    document.body.style.overflow = 'hidden'
+    this.$nextTick(() => this.$refs.dialog?.focus())
     await this.fetchOdd()
     this._pollInterval = setInterval(this.fetchOdd, 30000)
   },
   beforeUnmount() {
     clearInterval(this._pollInterval)
+    document.removeEventListener('keydown', this._onKeyDown)
+    document.body.style.overflow = ''
+    this.$nextTick(() => this._lastFocusedElement?.focus?.())
   },
   methods: {
+    close() { this.$emit('close') },
+    handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        this.close()
+        return
+      }
+      if (event.key !== 'Tab' || !this.$refs.dialog) return
+      const focusable = [...this.$refs.dialog.querySelectorAll('button:not(:disabled),a[href],[tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    },
     async fetchOdd() {
       try {
         const { data } = await axios.get('/api/config/free-odd2')
