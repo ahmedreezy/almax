@@ -1,5 +1,5 @@
 <template>
-  <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200" @pointermove="onDashboardPointerMove">
+  <div class="dev-dash tw-min-h-screen tw-bg-ink tw-text-slate-200">
     <button
       v-if="mobileMenuOpen"
       class="d-mobile-backdrop"
@@ -877,7 +877,6 @@ export default {
       commissionLedger: { rows: [], total: 0, cursor: null, hasMore: false, loading: false, error: '' },
       mobileMenuOpen: false,
       sidebarCollapsed: false,
-      pointerFrame: null,
       todayDate: d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
       navItems: [
         {
@@ -996,26 +995,11 @@ export default {
     await Promise.all([this.fetchAnalytics(), this.fetchGatewayConfig(), this.fetchWalletSummary()])
   },
   beforeUnmount() {
-    if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
     window.removeEventListener('keydown', this.onKeydown)
     window.removeEventListener('resize', this.onViewportChange)
     document.body.style.overflow = ''
   },
   methods: {
-    onDashboardPointerMove(event) {
-      if (event.pointerType && event.pointerType !== 'mouse') return
-      const tile = event.target.closest?.('.kpi-card, .chart-card, .section-card, .gateway-card, .withdrawal-card')
-      if (!tile) return
-      if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
-      const clientX = event.clientX
-      const clientY = event.clientY
-      this.pointerFrame = requestAnimationFrame(() => {
-        const rect = tile.getBoundingClientRect()
-        tile.style.setProperty('--pointer-x', `${clientX - rect.left}px`)
-        tile.style.setProperty('--pointer-y', `${clientY - rect.top}px`)
-        this.pointerFrame = null
-      })
-    },
     selectSection(section) {
       this.activeSection = section
       this.closeMobileMenu()
@@ -2500,11 +2484,11 @@ code {
   --d-sidebar: #0e141d;
   --d-panel: #121923;
   --d-elevated: #17212d;
-  --d-line: rgba(148, 163, 184, .11);
+  --d-line: rgba(148, 163, 184, .22);
   --d-accent: #8fb3d9;
   --d-accent-strong: #b7d0e8;
   --d-text: #f2f5f7;
-  --d-muted: #8290a3;
+  --d-muted: #9ba8b8;
   min-height: 100dvh;
   background: var(--d-ink);
   color: var(--d-text);
@@ -2524,7 +2508,7 @@ code {
 .d-collapse svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .d-collapse:hover { background: rgba(143,179,217,.09); color: var(--d-accent-strong); }
 .d-nav { padding: 18px 12px; }
-.d-nav-group { margin: 4px 10px 10px; color: #465264; font-size: 8px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; }
+.d-nav-group { margin: 4px 10px 10px; color: #788596; font-size: 8px; font-weight: 750; letter-spacing: .17em; text-transform: uppercase; }
 .d-nav-group--spaced { margin-top: 22px; }
 .d-nav-btn {
   min-height: 52px;
@@ -2550,7 +2534,7 @@ code {
 .d-nav-btn.active .d-nav-desc { color: #7e9fbe; }
 .d-nav-icon { width: 20px; }
 .d-nav-label { font-size: 12px; font-weight: 650; }
-.d-nav-desc { margin-top: 5px; color: #4f5b6b; }
+.d-nav-desc { margin-top: 5px; color: #7f8c9d; }
 .d-user-strip { border-top-color: var(--d-line); }
 .d-user-av { border-radius: 9px; background: var(--d-accent); color: #09111a; }
 .d-logout { margin: 0 12px 14px; border: 0; border-radius: 7px; background: rgba(255,255,255,.025); }
@@ -2595,10 +2579,10 @@ code {
   overflow: hidden;
   isolation: isolate;
   padding: 22px;
-  border-left: 0 !important;
-  transition: transform .24s cubic-bezier(.22,.8,.2,1), background .22s ease, border-color .22s ease, box-shadow .22s ease;
+  border: 1px solid rgba(148,163,184,.22) !important;
+  transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
-.kpi-card::before { content: ''; position: absolute; inset: 0; z-index: 0; background: radial-gradient(260px circle at var(--pointer-x, 86%) var(--pointer-y, 12%), rgba(var(--tile-rgb), .2), transparent 68%); opacity: .36; pointer-events: none; transition: opacity .24s ease; }
+.kpi-card::before { content: none; display: none; }
 .kpi-card > * { position: relative; z-index: 1; }
 .kpi-graphic { position: absolute; top: 17px; right: 18px; width: 54px; height: 38px; display: grid; place-items: center; color: #718da9; opacity: .6; pointer-events: none; transition: transform .3s cubic-bezier(.22,.8,.2,1), opacity .22s ease; }
 .kpi-graphic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -2616,13 +2600,10 @@ code {
 .kpi-card.kpi-blue::after, .kpi-card.kpi-teal::after { background: #7f96b2; }
 .kpi-card.kpi-accent::after { background: var(--d-accent); }
 .kpi-card.kpi-red::after, .kpi-card.kpi-warn::after { background: #b96f6f; }
-.kpi-card:hover { transform: translateY(-4px); border-color: rgba(var(--tile-rgb),.24); box-shadow: 0 24px 48px rgba(2, 6, 12, .27); }
-.kpi-card:hover::before { opacity: 1; }
-.kpi-card:hover .kpi-graphic { transform: translateY(-2px) scale(1.06); opacity: .95; }
 .kpi-card:active { transform: translateY(-1px) scale(.995); }
-.kpi-label { color: #738095; font-size: 9px; letter-spacing: .13em; }
+.kpi-label { color: #9aa8b9; font-size: 9px; letter-spacing: .13em; }
 .kpi-value { color: var(--d-text); font-size: clamp(20px, 1.8vw, 26px); font-weight: 680; letter-spacing: -.035em; }
-.kpi-sub { margin-top: 10px; color: #667387; }
+.kpi-sub { margin-top: 10px; color: #8795a7; }
 .finance-reconcile { border: 1px solid rgba(75,143,117,.18); border-radius: 8px; background: #0f161e; color: #748196; }
 .finance-reconcile--warn { border-color: rgba(185,111,111,.2); }
 .finance-reconcile strong { color: #cbd3dc; }
@@ -2662,7 +2643,7 @@ code {
 .gateway-card { transition: transform .22s ease, background .22s ease, box-shadow .22s ease; }
 .gateway-card:hover { transform: translateY(-2px); background: #151e29; box-shadow: 0 20px 42px rgba(2,6,12,.2); }
 .gateway-card:active { transform: translateY(0) scale(.995); }
-.gateway-card--active { background: #111e1d; box-shadow: inset 2px 0 #5c9a7e; }
+.gateway-card--active { border-color: rgba(92,154,126,.55); background: #111e1d; box-shadow: none; }
 .gateway-actions button { min-height: 42px; border-color: var(--d-line); border-radius: 7px; transition: background .2s ease, color .2s ease, transform .15s ease; }
 .gateway-actions button:hover:not(:disabled) { background: #1a2633; color: #fff; }
 .gateway-actions button:active:not(:disabled) { transform: scale(.98); }
@@ -2676,6 +2657,20 @@ code {
 .dev-dash button:active:not(:disabled) { transform: translateY(0) scale(.975); }
 .dev-dash :is(.chart-card,.section-card,.audit-card,.withdrawal-card) { transition: border-color .22s ease, background-color .22s ease, box-shadow .22s ease; }
 .dev-dash :is(.chart-card,.section-card,.audit-card,.withdrawal-card):hover { border-color: rgba(143,179,217,.13); box-shadow: 0 20px 44px rgba(2,6,12,.18); }
+
+.dev-dash :is(.d-user-info small,.d-logout,.d-date,.d-loading) { color: #8794a5; }
+.dev-dash :is(.chart-total,.section-card-sub,.gateway-status-copy,.gateway-audit,.empty-msg,.td-muted) { color: #8997a8; }
+.dev-dash :is(.data-table th,.hbar-label,.gateway-provider-code) { color: #8290a2; }
+.dev-dash .data-table td { color: #aeb9c5; }
+
+@media (hover: hover) {
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(var(--tile-rgb),.42) !important;
+    box-shadow: 0 14px 30px rgba(2,6,12,.2);
+  }
+  .kpi-card:hover .kpi-graphic { transform: translateY(-1px) scale(1.03); opacity: .9; }
+}
 
 @media (min-width: 769px) {
   .d-sidebar, .d-main { transition: width .3s cubic-bezier(.22,.8,.2,1), margin-left .3s cubic-bezier(.22,.8,.2,1); }
