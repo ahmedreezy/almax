@@ -25,8 +25,8 @@
         Daily free tips, live scores &amp; VIP winnings — powered by Almax.
       </p>
       <div class="hero-actions">
-        <a class="hero-primary" href="#todays-almax-picks">View today’s picks <span aria-hidden="true">↓</span></a>
-        <a class="hero-secondary" href="#recent-winnings">See verified winnings</a>
+        <button type="button" class="hero-primary" @click="scrollToSection('todays-almax-picks')">View today’s picks <span aria-hidden="true">↓</span></button>
+        <button type="button" class="hero-secondary" @click="scrollToSection('recent-winnings')">See verified winnings</button>
       </div>
       <div class="hero-stats">
         <div class="stat">
@@ -79,6 +79,12 @@ export default {
     })
   },
   methods: {
+    scrollToSection(id) {
+      document.getElementById(id)?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      })
+    },
     animateCounter() {
       const TARGET = 12000
       const DURATION = 2000
@@ -208,11 +214,11 @@ export default {
   line-height: 1.7;
 }
 .hero-actions { display: flex; align-items: center; justify-content: center; gap: 12px; margin: -18px 0 34px; }
-.hero-actions a { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 18px; border-radius: 10px; font-size: 12px; font-weight: 780; text-decoration: none; transition: transform .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+.hero-actions button { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 18px; border-radius: 10px; font-family: inherit; font-size: 12px; font-weight: 780; text-decoration: none; cursor: pointer; transition: transform .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
 .hero-primary { border: 1px solid transparent; background: var(--gold); color: #17140b; }
 .hero-secondary { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.045); color: var(--white); }
-.hero-actions a:hover { transform: translateY(-2px); }
-.hero-actions a:active { transform: translateY(0) scale(.98); }
+.hero-actions button:hover { transform: translateY(-2px); }
+.hero-actions button:active { transform: translateY(0) scale(.98); }
 
 /* Stats row */
 .hero-stats {

@@ -78,7 +78,7 @@ body.user-route {
 #app-root.is-user-route .glow-layer:nth-child(4) { transform: translate3d(0,6px,0); color: rgba(36,222,202,.56); }
 #app-root.is-user-route .hero-slogan { color: #e7c85f; font-family: 'Outfit Variable',sans-serif; font-size: clamp(15px,2vw,19px); font-weight: 600; letter-spacing: .01em; }
 #app-root.is-user-route .hero-sub { max-width: 56ch; margin: 14px auto 44px; color: #a0a0a0; font-size: clamp(15px,2vw,18px); }
-#app-root.is-user-route .hero-actions a { box-shadow: none; }
+#app-root.is-user-route .hero-actions button { box-shadow: none; }
 #app-root.is-user-route .hero-primary { background: #f4cd47; color: #151208; }
 #app-root.is-user-route .hero-primary:hover { background: #ffe17a; color: #151208; box-shadow: 0 14px 32px rgba(244,205,71,.17); }
 #app-root.is-user-route .hero-secondary:hover { border-color: rgba(244,205,71,.28); background: rgba(244,205,71,.06); color: #ffe58a; }
@@ -228,7 +228,7 @@ body.user-route :focus-visible { outline: 2px solid #f4cd47 !important; outline-
   line-height: 1.65;
   text-wrap: pretty;
 }
-#app-root.is-user-route :is(.hero-actions a,.pick-vip-btn,.pick-vip-add-btn,.mm-next-btn,.reg-tab,.li-change,.proof-upload-send-btn,.up-login-btn,.up-logout-btn,.up-view-subs-btn,.up-submit-btn,.cta-btn,.skip-btn) {
+#app-root.is-user-route :is(.hero-actions button,.pick-vip-btn,.pick-vip-add-btn,.mm-next-btn,.reg-tab,.li-change,.proof-upload-send-btn,.up-login-btn,.up-logout-btn,.up-view-subs-btn,.up-submit-btn,.cta-btn,.skip-btn) {
   min-height: 44px;
   font-size: 15px;
   font-weight: 700;
@@ -275,7 +275,7 @@ body.user-route :is(.support-launcher small,.support-eyebrow,.support-header p,.
   #app-root.is-user-route .hero-slogan { font-size: 18px; line-height: 1.35; }
   #app-root.is-user-route .hero-sub { margin-top: 16px; margin-bottom: 34px; font-size: 16px; line-height: 1.65; }
   #app-root.is-user-route .hero-actions { align-items: stretch; flex-direction: column; gap: 12px; width: min(100%,380px); margin-inline: auto; margin-bottom: 32px; }
-  #app-root.is-user-route .hero-actions a { width: 100%; min-height: 50px; font-size: 16px; }
+  #app-root.is-user-route .hero-actions button { width: 100%; min-height: 50px; font-size: 16px; }
   #app-root.is-user-route .hero-stats { gap: 12px; padding: 17px 12px; border-color: rgba(244,205,71,.16); background: rgba(18,18,18,.88); }
   #app-root.is-user-route .stat-num { font-size: 20px; }
   #app-root.is-user-route .stat-label { font-size: 12px; }

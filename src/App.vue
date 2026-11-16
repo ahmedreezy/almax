@@ -1,6 +1,6 @@
 <template>
   <div id="app-root" :class="{ 'is-admin-route': isAdminRoute, 'is-user-route': !isAdminRoute }">
-    <a v-if="!isAdminRoute" class="skip-link" href="#todays-almax-picks">Skip to today’s predictions</a>
+    <a v-if="!isAdminRoute" class="skip-link" href="/" @click.prevent="scrollToSection('todays-almax-picks')">Skip to today’s predictions</a>
     <nav v-if="!isAdminRoute" class="theme-nav" aria-label="Primary navigation">
       <div class="theme-nav-inner">
         <a class="theme-brand" href="/" aria-label="Almax Football Predictions home">
@@ -84,6 +84,12 @@ export default {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange)
   },
   methods: {
+    scrollToSection(id) {
+      document.getElementById(id)?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      })
+    },
     handleVisibilityChange() {
       if (!document.hidden) this.checkForUpdate()
     },
