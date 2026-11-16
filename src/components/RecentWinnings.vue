@@ -1,5 +1,5 @@
 <template>
-  <section class="winnings" id="winnings">
+  <section class="winnings" id="recent-winnings">
     <div class="container">
       <div class="section-header">
         <div class="header-left">

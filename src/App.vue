@@ -1,26 +1,12 @@
 <template>
-  <div id="app-root" :class="{ 'light-mode': isLight, 'is-admin-route': isAdminRoute, 'is-user-route': !isAdminRoute }">
-    <a v-if="!isAdminRoute" class="skip-link" href="#featured">Skip to today’s predictions</a>
-    <!-- ── Theme Nav Bar ── -->
-    <nav v-if="!isAdminRoute" class="theme-nav" aria-label="Appearance settings">
+  <div id="app-root" :class="{ 'is-admin-route': isAdminRoute, 'is-user-route': !isAdminRoute }">
+    <a v-if="!isAdminRoute" class="skip-link" href="#todays-almax-picks">Skip to today’s predictions</a>
+    <nav v-if="!isAdminRoute" class="theme-nav" aria-label="Primary navigation">
       <div class="theme-nav-inner">
         <a class="theme-brand" href="/" aria-label="Almax Football Predictions home">
           <img class="theme-brand-logo" src="@/assets/almax-mark.png" alt="" />
           <span class="theme-brand-text">ALMAX</span>
         </a>
-        <span class="theme-nav-label">Appearance</span>
-        <div class="theme-nav-pills" role="group" aria-label="Choose theme">
-          <button
-            v-for="opt in themeOptions"
-            :key="opt.value"
-            :class="['theme-pill', { active: themeMode === opt.value }]"
-            :aria-pressed="themeMode === opt.value"
-            @click="setTheme(opt.value)"
-          >
-            <span class="pill-icon" aria-hidden="true">{{ opt.icon }}</span>
-            <span class="pill-label">{{ opt.label }}</span>
-          </button>
-        </div>
         <UserProfile class="nav-user-profile" />
       </div>
     </nav>
@@ -57,23 +43,14 @@ export default {
   name: 'App',
   components: { UserProfile, PhotoLightbox },
   data() {
-    const saved = localStorage.getItem('theme') || 'dark'
     return {
-      themeMode: saved,
-      systemIsLight: window.matchMedia('(prefers-color-scheme: light)').matches,
-      _systemMedia: null,
       _updateTimer: null,
       updateAvailable: false,
       latestBuildId: '',
       latestVersion: '',
       currentVersion: process.env.VUE_APP_VERSION || '',
       currentBuildId: process.env.VUE_APP_BUILD_ID || '',
-      currentBuiltAt: process.env.VUE_APP_BUILT_AT || '',
-      themeOptions: [
-        { value: 'light',  icon: '☀️', label: 'Light'  },
-        { value: 'dark',   icon: '🌙', label: 'Dark'   },
-        { value: 'system', icon: '🖥',  label: 'System' },
-      ]
+      currentBuiltAt: process.env.VUE_APP_BUILT_AT || ''
     }
   },
   computed: {
@@ -82,32 +59,17 @@ export default {
         this.$route.path.startsWith('/admin') ||
         this.$route.path.startsWith('/dev')
       )
-    },
-    isLight() {
-      if (this.themeMode === 'system') return this.systemIsLight
-      return this.themeMode === 'light'
     }
   },
   watch: {
-    isLight(val) {
-      document.body.classList.toggle('light-mode', val)
-    },
-    themeMode(val) {
-      localStorage.setItem('theme', val)
-      if (val === 'system') {
-        this._attachSystemListener()
-      } else {
-        this._detachSystemListener()
-      }
-    },
     isAdminRoute(val) {
       document.body.classList.toggle('user-route', !val)
     }
   },
   mounted() {
-    document.body.classList.toggle('light-mode', this.isLight)
+    document.body.classList.remove('light-mode')
+    localStorage.removeItem('theme')
     document.body.classList.toggle('user-route', !this.isAdminRoute)
-    if (this.themeMode === 'system') this._attachSystemListener()
     this.checkForUpdate()
     this._updateTimer = window.setInterval(this.checkForUpdate, 20000)
     window.addEventListener('focus', this.checkForUpdate)
@@ -116,14 +78,12 @@ export default {
   },
   beforeUnmount() {
     document.body.classList.remove('user-route')
-    this._detachSystemListener()
     window.clearInterval(this._updateTimer)
     window.removeEventListener('focus', this.checkForUpdate)
     window.removeEventListener('online', this.checkForUpdate)
     document.removeEventListener('visibilitychange', this.handleVisibilityChange)
   },
   methods: {
-    setTheme(mode) { this.themeMode = mode },
     handleVisibilityChange() {
       if (!document.hidden) this.checkForUpdate()
     },
@@ -156,19 +116,6 @@ export default {
       const url = new URL(window.location.href)
       url.searchParams.set('_appv', this.latestBuildId || this.latestVersion || Date.now().toString())
       window.location.replace(url.toString())
-    },
-    _attachSystemListener() {
-      this._systemMedia = window.matchMedia('(prefers-color-scheme: light)')
-      this._systemMedia.addEventListener('change', this._onSystemChange)
-    },
-    _detachSystemListener() {
-      if (this._systemMedia) {
-        this._systemMedia.removeEventListener('change', this._onSystemChange)
-        this._systemMedia = null
-      }
-    },
-    _onSystemChange(e) {
-      this.systemIsLight = e.matches
     }
   }
 }
@@ -178,37 +125,30 @@ export default {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 #app-root { min-height: 100vh; }
 body:not(.user-route) { padding-top: 0; }
-.skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; padding: 9px 13px; border-radius: 8px; background: #f4cd47; color: #17140b; font-size: 12px; font-weight: 800; transform: translateY(-150%); transition: transform .18s ease; }
+.skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; min-height: 44px; padding: 11px 15px; border-radius: 8px; background: #f4cd47; color: #17140b; font-size: 15px; font-weight: 800; transform: translateY(-150%); transition: transform .18s ease; }
 .skip-link:focus { transform: translateY(0); }
 .powered-footnote {
   background: #050505;
   border-top: 1px solid rgba(255, 215, 0, 0.12);
   color: rgba(255, 255, 255, 0.48);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.5;
   padding: 8px 14px;
   text-align: center;
 }
-body.light-mode .powered-footnote {
-  background: #f3f4f6;
-  border-top-color: rgba(0, 0, 0, 0.12);
-  color: rgba(0, 0, 0, 0.56);
-}
 .update-ready { position:fixed; right:24px; bottom:96px; z-index:10020; width:min(390px,calc(100vw - 28px)); display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:13px 14px; border:1px solid rgba(255,215,0,.32); border-radius:16px; background:rgba(19,19,16,.94); color:#fff; box-shadow:0 18px 55px rgba(0,0,0,.48); backdrop-filter:blur(18px); }
 .update-ready.on-admin { bottom:24px; }
 .update-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:50%; background:rgba(255,215,0,.14); color:#ffd700; font-size:21px; font-weight:800; }
 .update-copy { min-width:0; display:flex; flex-direction:column; gap:2px; }
-.update-copy strong { font-size:13px; }
-.update-copy span { color:rgba(255,255,255,.58); font-size:10px; line-height:1.35; }
-.update-ready button { border:0; border-radius:9px; padding:9px 11px; background:#ffd700; color:#111; font-size:11px; font-weight:900; white-space:nowrap; cursor:pointer; }
-body.light-mode .update-ready { border-color:rgba(117,87,0,.2); background:rgba(255,255,252,.96); color:#17150d; box-shadow:0 18px 50px rgba(67,53,8,.2); }
-body.light-mode .update-copy span { color:rgba(20,18,10,.58); }
+.update-copy strong { font-size:15px; }
+.update-copy span { color:rgba(255,255,255,.68); font-size:13px; line-height:1.45; }
+.update-ready button { min-height:44px; border:0; border-radius:9px; padding:10px 14px; background:#ffd700; color:#111; font-size:15px; font-weight:800; white-space:nowrap; cursor:pointer; }
 .update-toast-enter-active,.update-toast-leave-active { transition:opacity .22s ease,transform .22s ease; }
 .update-toast-enter-from,.update-toast-leave-to { opacity:0; transform:translateY(12px) scale(.97); }
 
-/* ── Theme Nav ── */
+/* ── User navigation ── */
 .theme-nav {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -223,11 +163,6 @@ body.light-mode .update-copy span { color:rgba(20,18,10,.58); }
   align-items: center;
   justify-content: center;
   transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
-}
-body.light-mode .theme-nav {
-  background: rgba(240, 242, 245, 0.96);
-  border-bottom-color: rgba(0, 0, 0, 0.15);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
 }
 .theme-nav-inner {
   display: flex;
@@ -260,72 +195,12 @@ body.light-mode .theme-nav {
   letter-spacing: 1.6px;
   line-height: 1;
 }
-body.light-mode .theme-brand-text {
-  color: #141414;
-}
 .nav-user-profile { margin-left: 4px; }
-.theme-nav-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: rgba(170, 170, 170, 0.7);
-  user-select: none;
-}
-body.light-mode .theme-nav-label {
-  color: rgba(80, 80, 80, 0.8);
-}
-.theme-nav-pills {
-  display: flex;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 24px;
-  padding: 3px;
-}
-body.light-mode .theme-nav-pills {
-  background: rgba(0, 0, 0, 0.07);
-}
-.theme-pill {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: none;
-  background: transparent;
-  color: rgba(170, 170, 170, 0.75);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
-}
-body.light-mode .theme-pill {
-  color: rgba(80, 80, 80, 0.8);
-}
-.theme-pill:hover {
-  background: rgba(255, 215, 0, 0.1);
-  color: #FFD700;
-}
-.theme-pill.active {
-  background: rgba(255, 215, 0, 0.18);
-  color: #FFD700;
-  font-weight: 700;
-}
-body.light-mode .theme-pill.active {
-  background: rgba(184, 134, 11, 0.15);
-  color: #6b4c0a;
-}
-.pill-icon { font-size: 13px; line-height: 1; }
-.pill-label { line-height: 1; }
 
 @media (max-width: 480px) {
   .theme-nav-inner { padding: 0 10px; gap: 8px; }
   .theme-brand-logo { width: 28px; height: 28px; }
   .theme-brand-text { display: none; }
-  .theme-nav-label { display: none; }
-  .pill-label { display: none; }
-  .theme-pill { padding: 4px 9px; }
   .update-ready { right:14px; bottom:82px; grid-template-columns:auto 1fr; }
   .update-ready.on-admin { bottom:14px; }
   .update-ready button { grid-column:1/-1; width:100%; }

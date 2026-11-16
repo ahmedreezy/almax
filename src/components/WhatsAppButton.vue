@@ -52,8 +52,7 @@ export default {
   transition: transform 0.2s, box-shadow 0.2s;
   cursor: pointer;
 }
-.app-version { padding: 1px 5px; border-radius: 6px; background: rgba(8,8,8,.68); color: rgba(255,255,255,.65); font-size: 9px; font-weight: 750; line-height: 1.3; letter-spacing: .04em; backdrop-filter: blur(6px); }
-body.light-mode .app-version { background: rgba(255,255,255,.8); color: rgba(15,15,15,.58); }
+.app-version { padding: 2px 6px; border-radius: 6px; background: rgba(8,8,8,.82); color: rgba(255,255,255,.72); font-size: 12px; font-weight: 700; line-height: 1.3; letter-spacing: .03em; backdrop-filter: blur(6px); }
 .whatsapp-btn:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 30px rgba(37, 211, 102, 0.6);

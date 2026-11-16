@@ -705,18 +705,6 @@ export default {
 .support-fade-enter-from, .support-fade-leave-to { opacity: 0; }
 .support-fade-enter-from .support-panel, .support-fade-leave-to .support-panel { transform: translateY(12px) scale(.98); opacity: 0; }
 
-body.light-mode .support-launcher { background: #fff; color: #181818; box-shadow: 0 12px 30px rgba(59, 45, 0, .18); }
-body.light-mode .support-launcher small { color: #5d5d5d; }
-body.light-mode .support-layer { background: rgba(58, 48, 13, .16); }
-body.light-mode .support-panel { background: linear-gradient(145deg, rgba(255, 255, 252, .88), rgba(247, 244, 230, .76)); color: #181711; box-shadow: 0 30px 100px rgba(77, 62, 8, .2), inset 0 1px 0 rgba(255, 255, 255, .86); }
-body.light-mode .support-header, body.light-mode .support-composer, body.light-mode .support-privacy, body.light-mode .support-error { background: rgba(255, 255, 255, .38); }
-body.light-mode .support-messages { background: rgba(255, 252, 237, .3); }
-body.light-mode .support-back { color: #242117; border-color: rgba(45, 39, 15, .16); background: rgba(255, 255, 255, .42); }
-body.light-mode .from-support p, body.light-mode .support-suggestions button, body.light-mode .support-typing { background: rgba(255, 255, 255, .58); color: #1d1b14; border-color: rgba(45, 39, 15, .14); }
-body.light-mode .support-composer textarea { background: rgba(255, 255, 255, .7); border-color: rgba(45, 39, 15, .16); }
-body.light-mode .attachment-preview { background:rgba(255,255,255,.62); }
-body.light-mode .attachment-preview-card span { color:rgba(20,18,10,.62); }
-
 @media (max-width: 700px) {
   .support-launcher { right: 14px; bottom: 16px; min-height: 52px; padding: 9px 12px; }
   .support-launcher span:not(.support-unread) { display: none; }
@@ -736,7 +724,7 @@ body.light-mode .attachment-preview-card span { color:rgba(20,18,10,.62); }
 @media (max-width: 390px) {
   .support-back span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
   .support-back { width: 38px; justify-content: center; padding: 0; }
-  .support-eyebrow { font-size: 8px; }
+  .support-eyebrow { font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -25,8 +25,8 @@
         Daily free tips, live scores &amp; VIP winnings — powered by Almax.
       </p>
       <div class="hero-actions">
-        <a class="hero-primary" href="#featured">View today’s picks <span aria-hidden="true">↓</span></a>
-        <a class="hero-secondary" href="#winnings">See verified winnings</a>
+        <a class="hero-primary" href="#todays-almax-picks">View today’s picks <span aria-hidden="true">↓</span></a>
+        <a class="hero-secondary" href="#recent-winnings">See verified winnings</a>
       </div>
       <div class="hero-stats">
         <div class="stat">
