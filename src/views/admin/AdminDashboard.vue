@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard" @pointermove="onDashboardPointerMove">
+  <div class="dashboard">
     <button
       v-if="mobileMenuOpen"
       class="mobile-menu-backdrop"
@@ -150,7 +150,6 @@ export default {
     const d = new Date()
     return {
       activeSection: 'overview',
-      pointerFrame: null,
       todayDate: d.toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
       navItems: [
         { id: 'overview',      group: 'Overview',   label: 'Owner Overview',      desc: 'Position and attention' },
@@ -208,27 +207,12 @@ export default {
     this.notifPollInterval = setInterval(this.fetchNotifCount, 30000)
   },
   beforeUnmount() {
-    if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
     if (this.notifPollInterval) clearInterval(this.notifPollInterval)
     window.removeEventListener('keydown', this.onKeydown)
     window.removeEventListener('resize', this.onViewportChange)
     document.body.style.overflow = ''
   },
   methods: {
-    onDashboardPointerMove(event) {
-      if (event.pointerType && event.pointerType !== 'mouse') return
-      const tile = event.target.closest?.('.metric, .finance-metrics article, .balance-grid article, .overview-panel, .report-surface')
-      if (!tile) return
-      if (this.pointerFrame) cancelAnimationFrame(this.pointerFrame)
-      const clientX = event.clientX
-      const clientY = event.clientY
-      this.pointerFrame = requestAnimationFrame(() => {
-        const rect = tile.getBoundingClientRect()
-        tile.style.setProperty('--pointer-x', `${clientX - rect.left}px`)
-        tile.style.setProperty('--pointer-y', `${clientY - rect.top}px`)
-        this.pointerFrame = null
-      })
-    },
     selectSection(section) {
       this.activeSection = section
       if (this.$route.query.section !== section) this.$router.push({ query: { ...this.$route.query, section } })

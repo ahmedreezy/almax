@@ -177,6 +177,7 @@ export default {
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 #app-root { min-height: 100vh; }
+body:not(.user-route) { padding-top: 0; }
 .skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; padding: 9px 13px; border-radius: 8px; background: #f4cd47; color: #17140b; font-size: 12px; font-weight: 800; transform: translateY(-150%); transition: transform .18s ease; }
 .skip-link:focus { transform: translateY(0); }
 .powered-footnote {
