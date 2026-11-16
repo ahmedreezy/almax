@@ -1,5 +1,5 @@
 <template>
-  <section class="featured" id="featured">
+  <section class="featured" id="todays-almax-picks">
 
     <!-- ── FOOTBALL CARTOON DECORATIONS ── -->
     <div class="fb-decos" aria-hidden="true">
