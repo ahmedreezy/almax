@@ -103,7 +103,7 @@
                   <img v-if="pkgPhotoSrc(pkg)" :src="pkgPhotoSrc(pkg)" class="pkg-photo-thumb" alt="package photo" style="cursor:zoom-in" @click="$lightbox.open(pkgPhotoSrc(pkg))" />
                   <label class="photo-upload-btn" :for="'pkg-photo-' + pkg.id">+ Upload</label>
                   <button v-if="pkgPhotoSrc(pkg)" type="button" class="photo-delete-btn" @click="deletePkgPhoto(pkg)">🗑 Delete</button>
-                  <input :id="'pkg-photo-' + pkg.id" type="file" accept="image/jpeg,image/png,image/webp" class="photo-file-input" @change="onPkgPhotoChange(pkg, $event)" />
+                  <input :id="'pkg-photo-' + pkg.id" type="file" accept="image/*" class="photo-file-input" @change="onPkgPhotoChange(pkg, $event)" />
                 </div>
               </td>
 
@@ -187,7 +187,7 @@
               <input
                 :id="'pkg-photo-' + specialPackage.id"
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 class="photo-file-input"
                 @change="onPkgPhotoChange(specialPackage, $event)"
               />
@@ -394,6 +394,19 @@ export default {
     onPkgPhotoChange(pkg, event) {
       const file = event.target.files && event.target.files[0]
       if (!file) return
+      const supportedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      const hasSupportedExtension = /\.(jpe?g|png|webp)$/i.test(file.name || '')
+      if (!supportedTypes.includes(file.type) && !(!file.type && hasSupportedExtension)) {
+        this.saveError = 'This photo format is not supported. Choose a JPEG, PNG, or WEBP image.'
+        event.target.value = ''
+        return
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        this.saveError = 'This photo is larger than 5 MB. Choose a smaller image.'
+        event.target.value = ''
+        return
+      }
+      this.saveError = ''
       this.$set ? this.$set(this.pkgPhotoFiles, pkg.id, file) : (this.pkgPhotoFiles = { ...this.pkgPhotoFiles, [pkg.id]: file })
       pkg._clearPhoto = false
       pkg._dirty = true
@@ -834,7 +847,7 @@ export default {
 .td-photo { width: 90px; }
 .photo-upload-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .pkg-photo-thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(143,179,217,0.2); display: block; }
-.photo-file-input { display: none; }
+.photo-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .photo-upload-btn { display: inline-block; background: rgba(143,179,217,0.1); border: 1px solid rgba(143,179,217,0.25); border-radius: 6px; color: #8FB3D9; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
 .photo-upload-btn:hover { background: rgba(143,179,217,0.2); }
 .photo-delete-btn { display: inline-block; background: rgba(255,82,82,0.1); border: 1px solid rgba(255,82,82,0.25); border-radius: 6px; color: #ff5252; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
@@ -847,6 +860,11 @@ export default {
 @media (max-width: 1100px) {
   .special-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .special-field-wide { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .photo-upload-btn,.photo-delete-btn { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:10px 13px; font-size:14px; }
+  .special-photo-block { align-items:stretch; width:100%; }
+  .special-photo-btns { flex:1; }
 }
 
 @media (max-width: 640px) {
