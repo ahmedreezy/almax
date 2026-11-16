@@ -61,7 +61,6 @@
         class="picks-grid"
         role="list"
         aria-label="Almax prediction packages"
-        tabindex="0"
       >
         <div v-for="pick in displayedPicks" :key="pick.id" class="pick-card" :style="{ '--accent': pick.accent }" role="listitem">
           <div class="pick-img-bar">
@@ -96,10 +95,6 @@
             </div>
           </div>
         </div>
-      </div>
-      <div v-if="displayedPicks.length > 1" class="mobile-swipe-hint" aria-hidden="true">
-        <span class="mobile-swipe-hint__icon">↔</span>
-        <span>Swipe to see more packages</span>
       </div>
       <div v-if="!displayedPicks.length" class="picks-empty-state">
         <p>No active prediction packages are available right now.</p>
@@ -2181,22 +2176,9 @@ export default {
 /* Responsive */
 @media (max-width: 640px) {
   .picks-grid {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(82%, 82%);
-    gap: 14px;
-    margin-inline: -20px;
-    margin-bottom: 12px;
-    padding: 2px 20px 10px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scroll-padding-inline: 20px;
-    scroll-snap-type: inline mandatory;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
   }
-  .picks-grid::-webkit-scrollbar { display: none; }
-  .pick-card { scroll-snap-align: start; scroll-snap-stop: always; }
   .sh-row     { flex-direction: column; align-items: flex-start; }
 }
 
