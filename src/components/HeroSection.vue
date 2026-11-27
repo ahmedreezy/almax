@@ -24,6 +24,9 @@
       <p class="hero-sub">
         Daily free tips, live scores &amp; VIP winnings — powered by Almax.
       </p>
+      <button v-if="showSignup" type="button" class="hero-signup" @click="$emit('signup')">
+        Create an account
+      </button>
       <div class="hero-stats">
         <div class="stat">
           <span class="stat-num">94%</span>
@@ -47,6 +50,10 @@
 <script>
 export default {
   name: 'HeroSection',
+  props: {
+    showSignup: Boolean
+  },
+  emits: ['signup'],
   data() {
     return {
       counterValue: 0,
@@ -98,6 +105,26 @@ export default {
 </script>
 
 <style scoped>
+.hero-signup {
+  display: inline-block;
+  min-height: 48px;
+  margin: 0 0 24px;
+  padding: 10px 24px;
+  border: 1px solid #f4cd47;
+  border-radius: 9px;
+  background: #f4cd47;
+  color: #17140b;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+.hero-signup:hover {
+  background: #ffdf74;
+}
+.hero-signup:focus-visible {
+  outline: 2px solid #fff3c6;
+  outline-offset: 4px;
+}
 .hero {
   min-height: 100vh;
   background: var(--hero-bg);

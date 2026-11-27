@@ -1,7 +1,7 @@
 <template>
   <div id="home-page">
     <div :class="{ 'main-blurred': showModal || showVideoAd }">
-      <HeroSection />
+      <HeroSection :show-signup="!isMember" @signup="openSignup" />
       <FeaturedSection class="reveal-section" :openVip="triggerVip" @vipOpened="triggerVip = false" />
       <RecentWinnings class="reveal-section" />
       <TestimonialsSection class="reveal-section" />
@@ -34,6 +34,7 @@ import SupportChat from '../components/SupportChat.vue'
 import Odd2FloatingWidget from '../components/Odd2FloatingWidget.vue'
 import VideoAdModal from '../components/VideoAdModal.vue'
 import TestimonialsSection from '../components/TestimonialsSection.vue'
+import { isLoggedIn } from '../utils/userAuth'
 export default {
   name: 'HomePage',
   components: {
@@ -50,6 +51,7 @@ export default {
   },
   data() {
     return {
+      isMember: isLoggedIn(),
       showVideoAd: false,
       showModal: false,
       triggerVip: false,
@@ -57,6 +59,7 @@ export default {
     }
   },
   mounted() {
+    window.addEventListener('user-auth-changed', this.syncAuth)
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
       document.querySelectorAll('.reveal-section').forEach(section => section.classList.add('is-visible'))
       return
@@ -71,9 +74,16 @@ export default {
     this.$nextTick(() => document.querySelectorAll('.reveal-section').forEach(section => this.sectionObserver.observe(section)))
   },
   beforeUnmount() {
+    window.removeEventListener('user-auth-changed', this.syncAuth)
     this.sectionObserver?.disconnect()
   },
   methods: {
+    syncAuth() {
+      this.isMember = isLoggedIn()
+    },
+    openSignup() {
+      window.dispatchEvent(new CustomEvent('open-user-auth', { detail: { tab: 'register' } }))
+    },
     openWidget() {
       this.showVideoAd = true
     },

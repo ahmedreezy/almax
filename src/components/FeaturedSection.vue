@@ -626,6 +626,7 @@
 <script>
 import axios from 'axios'
 import { getUser, isLoggedIn, saveUser } from '../utils/userAuth'
+import { DEFAULT_WHATSAPP_CHANNEL, resolveWhatsAppChannel } from '../utils/whatsappChannel'
 import { getApiBaseUrl } from '../utils/apiBase'
 
 const API = getApiBaseUrl()
@@ -648,7 +649,7 @@ export default {
       showVipMenu: false,
       lastFocusedElement: null,
       vipStep: 1,
-      vipCfg: { currency: 'UGX', whatsapp_link: '' },
+      vipCfg: { currency: 'UGX', whatsapp_link: DEFAULT_WHATSAPP_CHANNEL },
       // Groups
       groups: [],
       groupsLoading: false,
@@ -993,7 +994,9 @@ export default {
     async fetchVipConfig() {
       try {
         const { data } = await axios.get('/api/config/vip-config')
-        if (data) this.vipCfg = { ...this.vipCfg, ...data }
+        if (data) {
+          this.vipCfg = { ...this.vipCfg, ...data, whatsapp_link: resolveWhatsAppChannel(data.whatsapp_link) }
+        }
       } catch { /* use defaults */ }
     },
     async fetchGroups({ silent = false } = {}) {

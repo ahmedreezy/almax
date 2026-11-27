@@ -249,11 +249,14 @@ export default {
       this.showDropdown = !this.showDropdown
       if (this.showDropdown) Promise.all([this.fetchStatus(), this.fetchNotifications()])
     },
-    openAuth() {
+    openAuth(event) {
+      const tab = event?.detail?.tab
+      if (tab === 'register' || tab === 'login') this.authTab = tab
       this.authError = ''
       this.lastFocusedElement = document.activeElement
       this.showAuthModal = true
       document.body.style.overflow = 'hidden'
+      window.dispatchEvent(new Event('user-auth-opened'))
       this.loadMagicQuestion()
       this.$nextTick(() => this.$refs.authDialog?.focus())
     },
