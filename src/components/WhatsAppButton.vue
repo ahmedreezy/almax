@@ -7,11 +7,11 @@
           <span class="channel-notice-label">Official Almax channel</span>
           <strong>{{ noticeTitle }}</strong>
         </div>
-        <p class="channel-notice-copy">{{ noticeCopy }}</p>
-        <p id="whatsapp-channel-notice" class="channel-notice-cue">
+        <div class="channel-notice-copy">{{ noticeCopy }}</div>
+        <div id="whatsapp-channel-notice" class="channel-notice-cue">
           <span aria-hidden="true">↓</span>
           {{ noticeCue }}
-        </p>
+        </div>
         <button ref="dismissButton" class="channel-notice-close" type="button" aria-label="Dismiss WhatsApp channel notice" @click="dismissNotice">
           <span aria-hidden="true">×</span>
         </button>
@@ -48,8 +48,8 @@ export default {
   data: () => ({
     appVersion: packageInfo.version,
     channelUrl: DEFAULT_WHATSAPP_CHANNEL,
-    noticeTitle: 'Stay in the loop on match day.',
-    noticeCopy: 'Follow Almax for football tips and updates in WhatsApp.',
+    noticeTitle: 'Get the match-day tips.',
+    noticeCopy: 'Fresh tips and Almax updates.',
     noticeCue: 'Tap the WhatsApp icon to follow',
     showNotice: false,
     isGuestNotice: false,
@@ -155,6 +155,7 @@ export default {
   color: #f3f9f5;
   box-shadow: 0 14px 36px #0008, inset 0 1px #ffffff0d;
   transform-origin: 26px 100%;
+  pointer-events: none;
 }
 .channel-notice::after {
   content: '';
@@ -210,8 +211,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid #365240;
   color: #a2ebb8;
   font-size: .8125rem;
@@ -243,6 +244,7 @@ export default {
   color: #c0d3c6;
   font: inherit;
   cursor: pointer;
+  pointer-events: auto;
 }
 .channel-notice-close span {
   display: grid;
