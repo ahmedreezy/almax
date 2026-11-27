@@ -8,7 +8,7 @@ const VIP_DEFAULTS = {
   currency:              'UGX',
   mtn_number:            '0770000000',
   airtel_number:         '0750000000',
-  whatsapp_link:         'https://whatsapp.com/channel/0029Vb77Bmb0wajqBRujZY30',
+  whatsapp_link:         'https://whatsapp.com/channel/0029VbDlmLz9Bb5xVZ7OJz0O',
   current_betslip_link:  '',
   current_betslip_code:  '',
   daily_betslip_link:    '',
